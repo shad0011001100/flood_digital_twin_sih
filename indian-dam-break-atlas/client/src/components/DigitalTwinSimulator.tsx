@@ -279,7 +279,7 @@ export function DigitalTwinSimulator() {
           <div>
             <div className="flex items-center gap-3 text-[#ebfc72] text-[11px] font-mono tracking-widest uppercase mb-2">
               <span className="w-7 h-[2px] bg-[#ebfc72]"></span>
-              REAL-TIME OPERATIONAL DAM-BREAK &amp; HADR DIGITAL TWIN &bull; PRODUCTION CORE
+              <span>04</span> / 3D HYDRODYNAMIC DIGITAL TWIN SIMULATOR &bull; LIVE COMMAND CORE
             </div>
             <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-[#f4f3e8]">
               National Hydrodynamic <span className="text-[#ebfc72]">Command System</span>

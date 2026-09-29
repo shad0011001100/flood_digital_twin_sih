@@ -13,8 +13,6 @@ declare global {
   }
 }
 
-const CARTO_API_KEY = "cb1_3z04_1_d7a616a5743dcd5dac572509";
-
 export interface MapViewProps {
   className?: string;
   center?: [number, number];
@@ -137,11 +135,11 @@ export function MapView({
         "terrain-dem": {
           type: "raster-dem",
           tiles: [
-            "https://demotiles.maplibre.org/terrain-tiles/{z}/{x}/{y}.png",
+            "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
           ],
           tileSize: 256,
-          encoding: "mapbox",
-          maxzoom: 12,
+          encoding: "terrarium",
+          maxzoom: 15,
         },
       },
       terrain: {
@@ -149,6 +147,13 @@ export function MapView({
         exaggeration: 1.8,
       },
       layers: [
+        {
+          id: "background-layer",
+          type: "background",
+          paint: {
+            "background-color": "#10110c",
+          },
+        },
         {
           id: baseLayerId,
           type: "raster",
@@ -177,11 +182,11 @@ export function MapView({
         map.addSource("terrain-dem", {
           type: "raster-dem",
           tiles: [
-            "https://demotiles.maplibre.org/terrain-tiles/{z}/{x}/{y}.png",
+            "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
           ],
           tileSize: 256,
-          encoding: "mapbox",
-          maxzoom: 12,
+          encoding: "terrarium",
+          maxzoom: 15,
         });
       }
       map.setTerrain({ source: "terrain-dem", exaggeration: 1.8 });

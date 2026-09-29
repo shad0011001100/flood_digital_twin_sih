@@ -132,7 +132,10 @@ export default function Home() {
 
           {/* Menu Title Header matching User Sketch */}
           <div className="sidebar-menu-header">
-            <strong>MENU</strong>
+            <div className="flex items-center gap-2">
+              <strong>MENU</strong>
+              <Menu size={14} className="text-[#ebfc72]" />
+            </div>
             <span className="mono">07 SECTIONS</span>
           </div>
 
@@ -393,11 +396,11 @@ export default function Home() {
         {/* INTERACTIVE 3D DIGITAL TWIN SIMULATOR (Now positioned after workflow, models, and cases) */}
         <DigitalTwinSimulator />
 
-        {/* Section 04: Open-Data Stack */}
+        {/* Section 05: Open-Data Stack */}
         <section id="open-data" className="section section-darkband">
           <div className="page-width">
             <div className="section-kicker mono">
-              <span>04</span> / THE OPEN-DATA STACK &amp; RADAR PIPELINE
+              <span>05</span> / THE OPEN-DATA STACK &amp; RADAR PIPELINE
             </div>
             <div className="data-head">
               <h2>
@@ -446,10 +449,10 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Section 05: Priority Gaps & Solutions */}
+        {/* Section 06: Priority Gaps & Solutions */}
         <section id="gaps" className="section page-width">
           <div className="section-kicker mono">
-            <span>05</span> / HOW THIS SYSTEM SOLVES THE CORE SIH GAPS
+            <span>06</span> / HOW THIS SYSTEM SOLVES THE CORE SIH GAPS
           </div>
           <div className="gap-head">
             <h2>
@@ -483,11 +486,11 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Section 06: References & Sources */}
+        {/* Section 07: References & Sources */}
         <section id="references" className="section refs-section">
           <div className="page-width">
             <div className="section-kicker mono">
-              <span>06</span> / CITATIONS, DATASETS &amp; EXPORT HUB
+              <span>07</span> / CITATIONS, DATASETS &amp; EXPORT HUB
             </div>
             <div className="refs-head">
               <h2>
