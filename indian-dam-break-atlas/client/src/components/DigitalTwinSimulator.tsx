@@ -30,165 +30,12 @@ import {
   Waves,
   X,
 } from "lucide-react";
-import { MapView, DownstreamSettlement } from "./Map";
-
-interface NationalDam {
-  id: string;
-  name: string;
-  river: string;
-  state: string;
-  coords: [number, number];
-  height_m: number;
-  capacity_mcm: number;
-  type: string;
-  basin: string;
-  downstream_gradient: number;
-  manning_n_default: number;
-  event_reference: string;
-}
-
-const NATIONAL_DAMS: NationalDam[] = [
-  {
-    id: "tapovan",
-    name: "Tapovan Vishnugad Barrage / Dam",
-    river: "Dhauliganga",
-    state: "Uttarakhand",
-    coords: [79.624, 30.528],
-    height_m: 22.0,
-    capacity_mcm: 1.2,
-    type: "Barrage / Hydroelectric",
-    basin: "Ganga Basin",
-    downstream_gradient: 0.042,
-    manning_n_default: 0.038,
-    event_reference: "Chamoli Disaster 2021",
-  },
-  {
-    id: "rishi_ganga",
-    name: "Rishi Ganga Hydro Project (Barrage)",
-    river: "Rishi Ganga",
-    state: "Uttarakhand",
-    coords: [79.692, 30.490],
-    height_m: 15.0,
-    capacity_mcm: 0.5,
-    type: "Run-of-the-river",
-    basin: "Ganga Basin",
-    downstream_gradient: 0.085,
-    manning_n_default: 0.045,
-    event_reference: "Chamoli Disaster 2021 Failure Origin",
-  },
-  {
-    id: "tehri",
-    name: "Tehri Dam (India's Highest Dam)",
-    river: "Bhagirathi",
-    state: "Uttarakhand",
-    coords: [78.480, 30.378],
-    height_m: 260.5,
-    capacity_mcm: 3540.0,
-    type: "Rock & Earth-fill Embankment",
-    basin: "Ganga Basin",
-    downstream_gradient: 0.025,
-    manning_n_default: 0.035,
-    event_reference: "CWC Highest Dam Benchmark",
-  },
-  {
-    id: "sardar_sarovar",
-    name: "Sardar Sarovar Dam",
-    river: "Narmada",
-    state: "Gujarat",
-    coords: [73.748, 21.828],
-    height_m: 163.0,
-    capacity_mcm: 9500.0,
-    type: "Concrete Gravity Dam",
-    basin: "Narmada Basin",
-    downstream_gradient: 0.008,
-    manning_n_default: 0.028,
-    event_reference: "CWC Major Basin Multi-Purpose Dam",
-  },
-  {
-    id: "idukki",
-    name: "Idukki Arch Dam",
-    river: "Periyar",
-    state: "Kerala",
-    coords: [76.973, 9.851],
-    height_m: 168.9,
-    capacity_mcm: 1996.0,
-    type: "Double Curvature Parabolic Arch",
-    basin: "West Flowing Rivers",
-    downstream_gradient: 0.032,
-    manning_n_default: 0.036,
-    event_reference: "CWC Steep Gorge Arch Dam Benchmark",
-  },
-  {
-    id: "bhakra",
-    name: "Bhakra Dam",
-    river: "Sutlej",
-    state: "Himachal Pradesh",
-    coords: [76.326, 31.408],
-    height_m: 226.0,
-    capacity_mcm: 9621.0,
-    type: "Concrete Gravity Dam",
-    basin: "Indus Basin",
-    downstream_gradient: 0.018,
-    manning_n_default: 0.032,
-    event_reference: "CWC High Gravity Dam Benchmark",
-  },
-  {
-    id: "hirakud",
-    name: "Hirakud Dam (Longest Earthen Dam)",
-    river: "Mahanadi",
-    state: "Odisha",
-    coords: [83.870, 21.570],
-    height_m: 60.96,
-    capacity_mcm: 5896.0,
-    type: "Composite Earthen & Masonry Embankment",
-    basin: "Mahanadi Basin",
-    downstream_gradient: 0.004,
-    manning_n_default: 0.025,
-    event_reference: "Longest Earthen Dam in Asia",
-  },
-  {
-    id: "mullaperiyar",
-    name: "Mullaperiyar Dam",
-    river: "Periyar",
-    state: "Kerala / Tamil Nadu",
-    coords: [77.145, 9.530],
-    height_m: 53.66,
-    capacity_mcm: 443.2,
-    type: "Surkhi-Lime Masonry Gravity",
-    basin: "West Flowing Rivers",
-    downstream_gradient: 0.028,
-    manning_n_default: 0.034,
-    event_reference: "Inter-State Ageing Masonry Dam Benchmark",
-  },
-  {
-    id: "chungthang",
-    name: "Chungthang / Teesta III Dam",
-    river: "Teesta",
-    state: "Sikkim",
-    coords: [88.650, 27.600],
-    height_m: 60.0,
-    capacity_mcm: 5.0,
-    type: "Concrete Face Rockfill Dam (CFRD)",
-    basin: "Brahmaputra Basin",
-    downstream_gradient: 0.055,
-    manning_n_default: 0.042,
-    event_reference: "Sikkim 2023 South Lhonak GLOF Dam Breach",
-  },
-  {
-    id: "kosi",
-    name: "Kosi River Landslide Dam",
-    river: "Kosi",
-    state: "Bihar / Transboundary",
-    coords: [86.950, 26.650],
-    height_m: 45.0,
-    capacity_mcm: 55.0,
-    type: "Natural Landslide Dam",
-    basin: "Ganga Basin",
-    downstream_gradient: 0.030,
-    manning_n_default: 0.040,
-    event_reference: "Kosi 2008 & 2014 River Blockage Event",
-  },
-];
+import { MapView } from "./Map";
+import {
+  ComprehensiveNationalDam,
+  COMPREHENSIVE_NATIONAL_DAMS,
+  DownstreamSettlement,
+} from "@/lib/nationalDamsData";
 
 interface PresetScenario {
   id: string;
@@ -220,16 +67,8 @@ const DEM_PROVIDERS = [
   { id: "srtm_30m", name: "NASA SRTM v3 (30m)", factor: 1.08, badge: "Standard Legacy Baseline" },
 ];
 
-const CHAMOLI_SETTLEMENTS: DownstreamSettlement[] = [
-  { name: "Rishiganga Barrage / Powerhouse", coords: [79.715, 30.485], elev: "2,050m", distanceKm: 4.8, arrivalMin: 12, peakDepthM: 18.2 },
-  { name: "Reni Village (Lower Habitation)", coords: [79.702, 30.488], elev: "1,980m", distanceKm: 7.2, arrivalMin: 18, peakDepthM: 14.6 },
-  { name: "Tapovan Vishnugad Intake Tunnel", coords: [79.630, 30.495], elev: "1,800m", distanceKm: 15.4, arrivalMin: 42, peakDepthM: 16.8 },
-  { name: "Joshimath / Dhauliganga Confluence", coords: [79.565, 30.552], elev: "1,380m", distanceKm: 27.6, arrivalMin: 75, peakDepthM: 9.4 },
-  { name: "Helang Bridge / NH-58 Checkpost", coords: [79.510, 30.565], elev: "1,220m", distanceKm: 34.2, arrivalMin: 105, peakDepthM: 6.8 },
-];
-
 export function DigitalTwinSimulator() {
-  const [selectedDam, setSelectedDam] = useState<NationalDam>(NATIONAL_DAMS[0]);
+  const [selectedDam, setSelectedDam] = useState<ComprehensiveNationalDam>(COMPREHENSIVE_NATIONAL_DAMS[0]);
   const [selectedPreset, setSelectedPreset] = useState<PresetScenario>(PRESETS[2]);
   const [selectedDEM, setSelectedDEM] = useState(DEM_PROVIDERS[1]);
 
@@ -239,6 +78,14 @@ export function DigitalTwinSimulator() {
   const [manningN, setManningN] = useState(selectedPreset.manning_n);
   const [rainfall24h, setRainfall24h] = useState(180); // mm/24hr
   const [bifurcationSplit, setBifurcationSplit] = useState(70); // % main canyon
+
+  // Extended Hydrodynamic, Geotechnical & Operational Parameters
+  const [debrisConcentration, setDebrisConcentration] = useState(18); // % sediment/debris volume (0 - 45%)
+  const [breachSideSlope, setBreachSideSlope] = useState(0.5); // z:1 (H:V)
+  const [spillwayDischarge, setSpillwayDischarge] = useState(1200); // m³/s controlled spillway release
+  const [amcCondition, setAmcCondition] = useState<"AMC-I" | "AMC-II" | "AMC-III">("AMC-II");
+  const [failureMode, setFailureMode] = useState<"overtopping" | "piping" | "shear" | "glof">("overtopping");
+  const [showInfrastructure, setShowInfrastructure] = useState(true);
 
   const [solverMode, setSolverMode] = useState<"sph" | "delft3d" | "compare">("compare");
   const [basemap, setBasemap] = useState<"dark" | "voyager" | "satellite">("dark");
@@ -349,11 +196,14 @@ export function DigitalTwinSimulator() {
 
   // Handle Dam Change
   const handleSelectDam = (damId: string) => {
-    const found = NATIONAL_DAMS.find((d) => d.id === damId);
+    const found = COMPREHENSIVE_NATIONAL_DAMS.find((d) => d.id === damId);
     if (found) {
       setSelectedDam(found);
       setWaterDepth(Math.round(found.height_m * 0.85));
       setManningN(Number((found.manning_n_default * selectedDEM.factor).toFixed(3)));
+      if (mapInstance) {
+        mapInstance.flyTo({ center: found.coords, zoom: 11.2, pitch: is3DMode ? 64 : 0, duration: 1500 });
+      }
     }
   };
 
@@ -367,13 +217,17 @@ export function DigitalTwinSimulator() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           project_id: selectedDam.id,
-          scenario_type: selectedPreset.failure_type,
+          scenario_type: failureMode || selectedPreset.failure_type,
           scenario_preset: selectedPreset.id,
           terrain_provider: selectedDEM.id,
           breach_width_m: breachWidth,
           water_depth_m: waterDepth,
           formation_time_min: formationTime,
           manning_n: manningN,
+          debris_concentration_pct: debrisConcentration,
+          breach_side_slope_z: breachSideSlope,
+          spillway_discharge_cms: spillwayDischarge,
+          amc_condition: amcCondition,
           solver_mode: solverMode,
         }),
       });
@@ -397,12 +251,25 @@ export function DigitalTwinSimulator() {
     return `T+${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
   };
 
-  // Compute Peak Outflow
+  // Bulking factor due to sediment: B_f = 1 / (1 - Cs)
+  const bulkingFactor = 1 / (1 - Math.min(debrisConcentration, 45) / 100);
+  const amcMultiplier = amcCondition === "AMC-I" ? 0.85 : amcCondition === "AMC-II" ? 1.0 : 1.25;
+
+  // Compute Peak Outflow with Froehlich/MacDonald + Debris Bulking + Pre-breach Spillway
   const computedPeakQ = Math.round(
-    selectedPreset.peak_discharge *
+    (selectedPreset.peak_discharge *
       (breachWidth / selectedPreset.breach_width) *
-      (1 + (rainfall24h / 300) * 0.25)
+      (1 + (rainfall24h / 300) * 0.25) *
+      amcMultiplier *
+      bulkingFactor) + spillwayDischarge
   );
+
+  // Dynamic wave velocity estimation (m/s) based on head, slope, and Manning's n
+  const computedWaveVelocity = (
+    Math.sqrt(9.81 * (waterDepth * 0.6)) *
+    (1 / (1 + manningN * 10)) *
+    (1 + selectedDam.downstream_gradient * 5)
+  ).toFixed(1);
 
   return (
     <section id="simulator-section" className="relative w-full bg-[#13140e] border-y border-[rgba(244,243,232,0.18)] py-10">
@@ -431,9 +298,9 @@ export function DigitalTwinSimulator() {
                 onChange={(e) => handleSelectDam(e.target.value)}
                 className="bg-transparent text-[#f4f3e8] text-xs font-bold outline-none cursor-pointer"
               >
-                {NATIONAL_DAMS.map((d) => (
+                {COMPREHENSIVE_NATIONAL_DAMS.map((d) => (
                   <option key={d.id} value={d.id} className="bg-[#13140e] text-[#f4f3e8]">
-                    {d.name} ({d.state})
+                    {d.name} ({d.state}) &bull; {d.river}
                   </option>
                 ))}
               </select>
@@ -587,11 +454,13 @@ export function DigitalTwinSimulator() {
           <MapView
             className="w-full h-full"
             center={selectedDam.coords}
+            dam={selectedDam}
+            bifurcationSplit={bifurcationSplit}
+            showInfrastructure={showInfrastructure}
             solverMode={solverMode}
             showSAR={showSAR}
             basemap={basemap}
             simTimeMinutes={simTimeMinutes}
-            settlements={CHAMOLI_SETTLEMENTS}
             onMapReady={(m) => setMapInstance(m)}
           />
 
@@ -694,16 +563,19 @@ export function DigitalTwinSimulator() {
             </button>
           )}
 
-          {/* Floating Left Panel: Physical Sliders & Weather */}
+          {/* Floating Left Panel: Physical Sliders, Sediment & Operational Parameters */}
           {showLeftPanel && (
-            <div className="absolute top-16 left-4 bottom-24 w-80 bg-[#13140e]/95 backdrop-blur-md border border-[rgba(244,243,232,0.18)] rounded-lg p-4 z-30 flex flex-col justify-between overflow-y-auto font-mono text-xs shadow-2xl">
-              <div className="space-y-3.5">
-                <div className="flex items-center justify-between border-b border-[rgba(244,243,232,0.12)] pb-2">
-                  <span className="text-[#ebfc72] font-bold flex items-center gap-2">
-                    <Sliders size={13} /> HYDRODYNAMIC ENGINE
+            <div className="absolute top-16 left-4 bottom-24 w-84 sm:w-96 bg-[#13140e]/95 backdrop-blur-md border border-[rgba(244,243,232,0.18)] rounded-lg p-4 z-30 flex flex-col justify-between overflow-y-auto font-mono text-xs shadow-2xl">
+              <div className="space-y-4 pr-1">
+                {/* Panel Title & Status */}
+                <div className="flex items-center justify-between border-b border-[rgba(244,243,232,0.12)] pb-2.5">
+                  <span className="text-[#ebfc72] font-bold flex items-center gap-2 text-xs">
+                    <Sliders size={14} /> HYDRODYNAMIC ENGINE PARAMS
                   </span>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-[#84837b]">{selectedDEM.id.split("_")[0]}</span>
+                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                      CWC CALIBRATED
+                    </span>
                     <button
                       onClick={() => setShowLeftPanel(false)}
                       className="p-1 text-[#84837b] hover:text-[#f4f3e8] hover:bg-[#1b1d14] rounded transition"
@@ -714,119 +586,311 @@ export function DigitalTwinSimulator() {
                   </div>
                 </div>
 
-                {/* DEM Selector */}
-                <div>
-                  <label className="text-[10px] text-[#84837b] uppercase block mb-1">
-                    ELEVATION DTM PROVIDER
-                  </label>
-                  <select
-                    value={selectedDEM.id}
-                    onChange={(e) => {
-                      const found = DEM_PROVIDERS.find((d) => d.id === e.target.value);
-                      if (found) {
-                        setSelectedDEM(found);
-                        setManningN(Number((selectedDam.manning_n_default * found.factor).toFixed(3)));
-                      }
-                    }}
-                    className="w-full bg-[#1b1d14] text-[#f4f3e8] border border-[rgba(244,243,232,0.2)] rounded px-2 py-1 text-xs outline-none"
-                  >
-                    {DEM_PROVIDERS.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Breach Parameters */}
-                <div>
-                  <div className="flex justify-between text-[11px] mb-1">
-                    <span className="text-[#84837b]">BREACH WIDTH (Bw)</span>
-                    <span className="text-[#ebfc72] font-bold">{breachWidth} m</span>
+                {/* --- SECTION 1: BREACH MECHANICS & GEOMETRY --- */}
+                <div className="space-y-2.5 bg-[#1b1d14]/70 p-2.5 rounded border border-[rgba(244,243,232,0.08)]">
+                  <div className="text-[10px] text-[#ebfc72] font-bold uppercase tracking-wider flex items-center justify-between">
+                    <span>1. BREACH GEOMETRY &amp; DTM</span>
+                    <span className="text-[#84837b] font-normal">{selectedDEM.id.split("_")[0]}</span>
                   </div>
-                  <input
-                    type="range"
-                    min={10}
-                    max={250}
-                    value={breachWidth}
-                    onChange={(e) => setBreachWidth(Number(e.target.value))}
-                    className="w-full accent-[#ebfc72] h-1 bg-[#1b1d14] rounded"
-                  />
-                </div>
 
-                <div>
-                  <div className="flex justify-between text-[11px] mb-1">
-                    <span className="text-[#84837b]">RESERVOIR WATER HEAD (H)</span>
-                    <span className="text-[#ebfc72] font-bold">{waterDepth} m</span>
+                  {/* DEM Selector */}
+                  <div>
+                    <label className="text-[10px] text-[#84837b] uppercase block mb-1">
+                      TERRAIN DTM / DSM PROVIDER
+                    </label>
+                    <select
+                      value={selectedDEM.id}
+                      onChange={(e) => {
+                        const found = DEM_PROVIDERS.find((d) => d.id === e.target.value);
+                        if (found) {
+                          setSelectedDEM(found);
+                          setManningN(Number((selectedDam.manning_n_default * found.factor).toFixed(3)));
+                        }
+                      }}
+                      className="w-full bg-[#13140e] text-[#f4f3e8] border border-[rgba(244,243,232,0.2)] rounded px-2 py-1 text-xs outline-none"
+                    >
+                      {DEM_PROVIDERS.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name} &bull; {d.badge}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <input
-                    type="range"
-                    min={15}
-                    max={260}
-                    value={waterDepth}
-                    onChange={(e) => setWaterDepth(Number(e.target.value))}
-                    className="w-full accent-[#ebfc72] h-1 bg-[#1b1d14] rounded"
-                  />
-                </div>
 
-                <div>
-                  <div className="flex justify-between text-[11px] mb-1">
-                    <span className="text-[#84837b]">FORMATION TIME (&tau;)</span>
-                    <span className="text-[#ebfc72] font-bold">{formationTime} min</span>
+                  {/* Failure Trigger Mechanism */}
+                  <div>
+                    <label className="text-[10px] text-[#84837b] uppercase block mb-1">
+                      FAILURE TRIGGER MECHANISM
+                    </label>
+                    <div className="grid grid-cols-2 gap-1">
+                      {(
+                        [
+                          { id: "overtopping", label: "Overtopping", desc: "PMF Flood" },
+                          { id: "piping", label: "Piping Void", desc: "Internal Cavity" },
+                          { id: "shear", label: "Foundation Shear", desc: "Structural" },
+                          { id: "glof", label: "GLOF Outburst", desc: "Alpine Avalanche" },
+                        ] as const
+                      ).map((m) => (
+                        <button
+                          key={m.id}
+                          onClick={() => setFailureMode(m.id)}
+                          className={`px-2 py-1 rounded text-left border transition text-[10px] ${
+                            failureMode === m.id
+                              ? "bg-[#ebfc72] text-[#13140e] border-[#ebfc72] font-bold"
+                              : "bg-[#13140e] text-[#84837b] border-[rgba(244,243,232,0.12)] hover:text-[#f4f3e8]"
+                          }`}
+                        >
+                          <div className="font-semibold">{m.label}</div>
+                          <div className="text-[9px] opacity-70">{m.desc}</div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <input
-                    type="range"
-                    min={5}
-                    max={180}
-                    value={formationTime}
-                    onChange={(e) => setFormationTime(Number(e.target.value))}
-                    className="w-full accent-[#ebfc72] h-1 bg-[#1b1d14] rounded"
-                  />
-                </div>
 
-                {/* Weather Rainfall Slider */}
-                <div>
-                  <div className="flex justify-between text-[11px] mb-1">
-                    <span className="text-[#84837b]">24-HR RAINFALL (SCS-CN)</span>
-                    <span className="text-sky-400 font-bold">{rainfall24h} mm</span>
+                  {/* Breach Top Width */}
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="text-[#84837b]">BREACH TOP WIDTH (Bw)</span>
+                      <span className="text-[#ebfc72] font-bold">{breachWidth} m</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={10}
+                      max={280}
+                      value={breachWidth}
+                      onChange={(e) => setBreachWidth(Number(e.target.value))}
+                      className="w-full accent-[#ebfc72] h-1 bg-[#13140e] rounded cursor-pointer"
+                    />
                   </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={350}
-                    step={10}
-                    value={rainfall24h}
-                    onChange={(e) => setRainfall24h(Number(e.target.value))}
-                    className="w-full accent-sky-400 h-1 bg-[#1b1d14] rounded"
-                  />
-                </div>
 
-                {/* Valley Bifurcation */}
-                <div>
-                  <div className="flex justify-between text-[11px] mb-1">
-                    <span className="text-[#84837b]">VALLEY BRANCHING SPLIT</span>
-                    <span className="text-amber-400 font-bold">{bifurcationSplit}% Canyon / {100 - bifurcationSplit}% Terrace</span>
+                  {/* Breach Side Slope */}
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="text-[#84837b]">BREACH SIDE SLOPE (z:1 H:V)</span>
+                      <span className="text-[#ebfc72] font-bold">
+                        {breachSideSlope.toFixed(2)} : 1 ({breachSideSlope < 0.4 ? "Steep Rock" : breachSideSlope > 1.0 ? "Flat Earth" : "Standard"})
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0.1}
+                      max={1.5}
+                      step={0.05}
+                      value={breachSideSlope}
+                      onChange={(e) => setBreachSideSlope(Number(e.target.value))}
+                      className="w-full accent-[#ebfc72] h-1 bg-[#13140e] rounded cursor-pointer"
+                    />
                   </div>
-                  <input
-                    type="range"
-                    min={50}
-                    max={95}
-                    step={5}
-                    value={bifurcationSplit}
-                    onChange={(e) => setBifurcationSplit(Number(e.target.value))}
-                    className="w-full accent-amber-400 h-1 bg-[#1b1d14] rounded"
-                  />
+
+                  {/* Reservoir Water Head */}
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="text-[#84837b]">RESERVOIR WATER HEAD (H)</span>
+                      <span className="text-[#ebfc72] font-bold">{waterDepth} m</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={10}
+                      max={260}
+                      value={waterDepth}
+                      onChange={(e) => setWaterDepth(Number(e.target.value))}
+                      className="w-full accent-[#ebfc72] h-1 bg-[#13140e] rounded cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Formation Time */}
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="text-[#84837b]">BREACH FORMATION TIME (&tau;)</span>
+                      <span className="text-[#ebfc72] font-bold">{formationTime} min</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={5}
+                      max={180}
+                      value={formationTime}
+                      onChange={(e) => setFormationTime(Number(e.target.value))}
+                      className="w-full accent-[#ebfc72] h-1 bg-[#13140e] rounded cursor-pointer"
+                    />
+                  </div>
                 </div>
 
-                {/* Outflow Telemetry */}
-                <div className="bg-[#1b1d14] p-2 rounded border border-[rgba(244,243,232,0.1)] space-y-1">
-                  <div className="flex justify-between text-[10px]">
+                {/* --- SECTION 2: HYDRODYNAMICS & SEDIMENT BULKING --- */}
+                <div className="space-y-2.5 bg-[#1b1d14]/70 p-2.5 rounded border border-[rgba(244,243,232,0.08)]">
+                  <div className="text-[10px] text-sky-400 font-bold uppercase tracking-wider flex items-center justify-between">
+                    <span>2. HYDRODYNAMICS &amp; SEDIMENT BULKING</span>
+                    <span className="text-[9px] text-[#84837b]">Himalayan GLOF / Viscous</span>
+                  </div>
+
+                  {/* Debris / Sediment Concentration */}
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="text-[#84837b]">DEBRIS / SEDIMENT CONC (Cs)</span>
+                      <span className="text-amber-400 font-bold">
+                        {debrisConcentration}% (Bf: {bulkingFactor.toFixed(2)}x)
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={45}
+                      value={debrisConcentration}
+                      onChange={(e) => setDebrisConcentration(Number(e.target.value))}
+                      className="w-full accent-amber-400 h-1 bg-[#13140e] rounded cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[8px] text-[#84837b] mt-0.5">
+                      <span>0% (Clear Water)</span>
+                      <span>20% (Hyper-concentrated)</span>
+                      <span>45% (Debris Flow)</span>
+                    </div>
+                  </div>
+
+                  {/* Controlled Spillway Discharge */}
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="text-[#84837b]">PRE-BREACH SPILLWAY (Qspill)</span>
+                      <span className="text-sky-400 font-bold">{spillwayDischarge.toLocaleString()} m³/s</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={8000}
+                      step={200}
+                      value={spillwayDischarge}
+                      onChange={(e) => setSpillwayDischarge(Number(e.target.value))}
+                      className="w-full accent-sky-400 h-1 bg-[#13140e] rounded cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Channel Manning's Roughness n */}
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="text-[#84837b]">BED ROUGHNESS (Manning&apos;s n)</span>
+                      <span className="text-emerald-400 font-bold">{manningN.toFixed(3)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0.020}
+                      max={0.080}
+                      step={0.002}
+                      value={manningN}
+                      onChange={(e) => setManningN(Number(Number(e.target.value).toFixed(3)))}
+                      className="w-full accent-emerald-400 h-1 bg-[#13140e] rounded cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[8px] text-[#84837b] mt-0.5">
+                      <span>0.020 (Alluvial)</span>
+                      <span>0.040 (Gravel)</span>
+                      <span>0.080 (Boulder Canyon)</span>
+                    </div>
+                  </div>
+
+                  {/* Valley Branching Bifurcation */}
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="text-[#84837b]">VALLEY BRANCHING SPLIT</span>
+                      <span className="text-amber-400 font-bold">
+                        {bifurcationSplit}% Main / {100 - bifurcationSplit}% Terrace
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={50}
+                      max={95}
+                      step={5}
+                      value={bifurcationSplit}
+                      onChange={(e) => setBifurcationSplit(Number(e.target.value))}
+                      className="w-full accent-amber-400 h-1 bg-[#13140e] rounded cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* --- SECTION 3: CATCHMENT HYDROLOGY & EXPOSURE --- */}
+                <div className="space-y-2.5 bg-[#1b1d14]/70 p-2.5 rounded border border-[rgba(244,243,232,0.08)]">
+                  <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center justify-between">
+                    <span>3. METEOROLOGY &amp; EXPOSURE</span>
+                    <span className="text-[9px] text-[#84837b]">SCS-CN Runoff</span>
+                  </div>
+
+                  {/* Weather Rainfall Slider */}
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="text-[#84837b]">24-HR BASIN RAINFALL</span>
+                      <span className="text-sky-400 font-bold">{rainfall24h} mm</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={350}
+                      step={10}
+                      value={rainfall24h}
+                      onChange={(e) => setRainfall24h(Number(e.target.value))}
+                      className="w-full accent-sky-400 h-1 bg-[#13140e] rounded cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Antecedent Soil Moisture Condition (AMC) */}
+                  <div>
+                    <label className="text-[10px] text-[#84837b] uppercase block mb-1">
+                      ANTECEDENT SOIL MOISTURE (AMC)
+                    </label>
+                    <div className="grid grid-cols-3 gap-1">
+                      {(["AMC-I", "AMC-II", "AMC-III"] as const).map((amc) => (
+                        <button
+                          key={amc}
+                          onClick={() => setAmcCondition(amc)}
+                          className={`py-1 text-center rounded border transition text-[10px] ${
+                            amcCondition === amc
+                              ? "bg-emerald-500 text-[#13140e] border-emerald-400 font-bold"
+                              : "bg-[#13140e] text-[#84837b] border-[rgba(244,243,232,0.12)] hover:text-[#f4f3e8]"
+                          }`}
+                        >
+                          <div className="font-bold">{amc}</div>
+                          <div className="text-[8px] opacity-80">
+                            {amc === "AMC-I" ? "Dry (-15%)" : amc === "AMC-II" ? "Normal" : "Sat (+25%)"}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Critical Infrastructure Exposure Toggle */}
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] text-[#84837b]">CRITICAL ASSETS OVERLAY</span>
+                    <button
+                      onClick={() => setShowInfrastructure(!showInfrastructure)}
+                      className={`px-2.5 py-0.5 rounded text-[10px] font-bold border transition ${
+                        showInfrastructure
+                          ? "bg-rose-500/20 text-rose-300 border-rose-400"
+                          : "bg-[#13140e] text-[#84837b] border-[rgba(244,243,232,0.12)]"
+                      }`}
+                    >
+                      {showInfrastructure ? "EXPOSURE ON" : "EXPOSURE OFF"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* --- LIVE HYDRODYNAMIC OUTFLOW TELEMETRY BOX --- */}
+                <div className="bg-[#1b1d14] p-3 rounded-lg border border-[rgba(244,243,232,0.12)] space-y-1.5">
+                  <div className="text-[9px] text-[#84837b] uppercase font-bold tracking-wider border-b border-[rgba(244,243,232,0.08)] pb-1">
+                    Live Hydraulic Peak Metrics &bull; Froehlich/MacDonald
+                  </div>
+                  <div className="flex justify-between text-[11px]">
                     <span className="text-[#84837b]">PEAK OUTFLOW Qp:</span>
                     <span className="text-[#ebfc72] font-bold">{computedPeakQ.toLocaleString()} m³/s</span>
                   </div>
-                  <div className="flex justify-between text-[10px]">
-                    <span className="text-[#84837b]">SURGE FRONT VELOCITY:</span>
-                    <span className="text-[#f4f3e8] font-bold">14.8 m/s (53 km/h)</span>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-[#84837b]">SURGE FRONT SPEED:</span>
+                    <span className="text-[#f4f3e8] font-bold">
+                      {computedWaveVelocity} m/s ({(Number(computedWaveVelocity) * 3.6).toFixed(0)} km/h)
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-[#84837b]">SEDIMENT BULKING (Bf):</span>
+                    <span className="text-amber-400 font-bold">{bulkingFactor.toFixed(2)}x (+{Math.round((bulkingFactor - 1) * 100)}%)</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-[#84837b]">DOWNSTREAM REACH:</span>
+                    <span className="text-emerald-400 font-bold">{selectedDam.reachLengthKm} km Thalweg</span>
                   </div>
                 </div>
               </div>
@@ -834,16 +898,16 @@ export function DigitalTwinSimulator() {
               <button
                 onClick={handleRunSimulation}
                 disabled={isSimulating}
-                className="w-full mt-3 py-2 px-3 bg-[#ebfc72] hover:bg-[#f4f3e8] text-[#13140e] font-bold rounded flex items-center justify-center gap-2 transition disabled:opacity-50"
+                className="w-full mt-3 py-2.5 px-3 bg-[#ebfc72] hover:bg-[#f4f3e8] text-[#13140e] font-bold rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50 shadow-lg"
               >
                 {isSimulating ? (
                   <>
-                    <RefreshCw size={13} className="animate-spin" />
-                    <span>SOLVING 2D SWE / SPH...</span>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>COMPUTING 2D SWE / SPH DISPERSION...</span>
                   </>
                 ) : (
                   <>
-                    <Play size={13} className="fill-[#13140e]" />
+                    <Play size={14} className="fill-[#13140e]" />
                     <span>RE-COMPUTE PHYSICS ({lastLatency})</span>
                   </>
                 )}
@@ -1084,15 +1148,20 @@ export function DigitalTwinSimulator() {
               />
               <div className="flex justify-between text-[9px] text-[#84837b]">
                 <span>T+00:00 (Breach)</span>
-                <span className={simTimeMinutes >= 18 ? "text-amber-400 font-bold" : ""}>Reni (18m)</span>
-                <span className={simTimeMinutes >= 42 ? "text-rose-400 font-bold" : ""}>Tapovan (42m)</span>
-                <span className={simTimeMinutes >= 75 ? "text-emerald-400 font-bold" : ""}>Joshimath (75m)</span>
+                {selectedDam.settlements.slice(0, 3).map((s) => (
+                  <span
+                    key={s.name}
+                    className={simTimeMinutes >= s.arrivalMin ? "text-rose-400 font-bold" : "text-[#84837b]"}
+                  >
+                    {s.name.split(" ")[0]} (T+{s.arrivalMin}m)
+                  </span>
+                ))}
                 <span>T+06:00 (Recession)</span>
               </div>
             </div>
 
             <div className="hidden lg:flex items-center gap-3 text-[10px] text-[#84837b]">
-              <span>ACTIVE WAVE FRONT: <strong className="text-[#ebfc72]">Downstream Valley</strong></span>
+              <span>ACTIVE REACH: <strong className="text-[#ebfc72]">{selectedDam.river} Valley ({selectedDam.reachLengthKm} km)</strong></span>
             </div>
           </div>
         </div>
@@ -1104,9 +1173,16 @@ export function DigitalTwinSimulator() {
               <div className="text-[10px] text-[#ebfc72] uppercase font-bold flex items-center gap-2">
                 <ShieldAlert size={14} /> CIVIL DEFENSE &amp; NDRF EARLY WARNING ACTION MATRIX
               </div>
-              <h3 className="text-lg font-medium text-[#f4f3e8]">Downstream Habitation Inundation &amp; Evacuation Lead-Times</h3>
+              <h3 className="text-lg font-medium text-[#f4f3e8]">
+                Downstream Habitation Inundation &amp; Evacuation Lead-Times &bull; {selectedDam.name}
+              </h3>
             </div>
-            <span className="text-xs text-[#84837b]">SYNCHRONIZED WITH TIME: {formatTimeStr(simTimeMinutes)}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-bold">
+                SAFE ELEVATION: {selectedDam.safeElevation}
+              </span>
+              <span className="text-xs text-[#84837b]">TIME: {formatTimeStr(simTimeMinutes)}</span>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -1122,12 +1198,16 @@ export function DigitalTwinSimulator() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[rgba(244,243,232,0.06)]">
-                {CHAMOLI_SETTLEMENTS.map((s) => {
+                {selectedDam.settlements.map((s) => {
                   const hasArrived = simTimeMinutes >= s.arrivalMin;
                   const isUrgent = s.arrivalMin <= 30;
                   return (
                     <tr key={s.name} className="hover:bg-[#1b1d14]/50 transition">
-                      <td className="py-3 pr-4 font-bold text-[#f4f3e8]">{s.name}</td>
+                      <td className="py-3 pr-4 font-bold text-[#f4f3e8] flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-[#ebfc72]"></span>
+                        {s.name}
+                        <span className="text-[10px] text-[#84837b] font-normal">({s.elev})</span>
+                      </td>
                       <td className="py-3 px-4 text-[#84837b]">{s.distanceKm} km</td>
                       <td className="py-3 px-4 text-[#ebfc72] font-bold">T+{s.arrivalMin} min</td>
                       <td className="py-3 px-4 text-rose-400 font-bold">{s.peakDepthM} m</td>
