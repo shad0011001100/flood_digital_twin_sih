@@ -1,0 +1,2086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Intelligent Flood Digital Twin | 3D HADR Command Center</title>
+  
+  <!-- Google Fonts: DM Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+
+  <!-- MapLibre GL JS (v4.7.1) -->
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  
+  <!-- Tailwind CSS & Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #13140e; color: #f4f3e8; font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; }
+    #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+    
+    /* Precision Obsidian Glassmorphism */
+    .glass-panel {
+      background: rgba(19, 20, 14, 0.93);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(244, 243, 232, 0.18);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9);
+      color: #f4f3e8;
+    }
+    
+    input[type=range] {
+      accent-color: #ebfc72;
+    }
+
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace !important;
+    }
+
+    /* 3D High-Contrast Billboard Labels on Mountain Terrain */
+    .marker-3d {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      pointer-events: auto;
+      cursor: pointer;
+      box-shadow: 0 12px 28px -4px rgba(0,0,0,0.85), 0 0 0 1.5px rgba(255,255,255,0.3);
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .marker-3d:hover {
+      transform: scale(1.18) translateY(-4px);
+    }
+    .marker-origin {
+      background: linear-gradient(135deg, #e11d48, #9f1239);
+      color: #ffffff;
+      border: 2px solid #fecdd3;
+    }
+    .marker-barrage {
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+      color: #ffffff;
+      border: 2px solid #bae6fd;
+    }
+    .marker-village {
+      background: linear-gradient(135deg, #d97706, #92400e);
+      color: #ffffff;
+      border: 2px solid #fef3c7;
+    }
+    .marker-peak {
+      background: linear-gradient(135deg, #334155, #0f172a);
+      color: #ffffff;
+      border: 2px solid #e2e8f0;
+    }
+    .marker-safe {
+      background: linear-gradient(135deg, #059669, #065f46);
+      color: #ffffff;
+      border: 2px solid #a7f3d0;
+    }
+    .marker-bifurcation {
+      background: linear-gradient(135deg, #d97706, #78350f);
+      color: #ffffff;
+      border: 2px solid #fde68a;
+      box-shadow: 0 0 16px rgba(245, 158, 11, 0.4);
+    }
+
+    /* Flow Arrow Pulse */
+    @keyframes flow-pulse {
+      0% { opacity: 0.4; transform: translateY(0); }
+      50% { opacity: 1; transform: translateY(4px); }
+      100% { opacity: 0.4; transform: translateY(0); }
+    }
+    .flow-arrow-anim {
+      animation: flow-pulse 1.8s infinite ease-in-out;
+    }
+
+    /* Notification Banner */
+    #sim-banner {
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      transform: translateY(-150%);
+      opacity: 0;
+    }
+    #sim-banner.active {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #0284c7; }
+  </style>
+</head>
+<body class="text-slate-100 antialiased select-none">
+
+  <!-- 3D Terrain Map Canvas -->
+  <div id="map"></div>
+
+  <!-- Gravity & Altitude Profile Indicator -->
+  <div id="banner-gravity" class="absolute top-20 left-1/2 -translate-x-1/2 z-20 glass-panel px-4 py-2 rounded-2xl flex items-center gap-4 text-xs border border-sky-400/30 transition-all duration-300">
+    <div class="flex items-center gap-2">
+      <span class="px-2 py-0.5 rounded-lg bg-rose-500/20 text-rose-400 font-bold font-mono">ORIGIN 3,700m</span>
+      <span class="text-slate-400 text-[11px]">&bull; Glacier &bull;</span>
+    </div>
+    
+    <!-- Downhill Gravity Arrow -->
+    <div class="flex items-center gap-1.5 text-sky-400 font-mono font-bold">
+      <i data-lucide="arrow-down-right" class="w-4 h-4 text-emerald-400 flow-arrow-anim"></i>
+      <span class="text-[11px] text-emerald-400">GRAVITY: -2,320m</span>
+      <i data-lucide="arrow-down-right" class="w-4 h-4 text-emerald-400 flow-arrow-anim"></i>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <span class="text-slate-400 text-[11px]">&bull; Valley &bull;</span>
+      <span class="px-2 py-0.5 rounded-lg bg-sky-500/20 text-sky-400 font-bold font-mono">TAPOVAN &rarr; 1,380m</span>
+    </div>
+
+    <button id="btn-close-gravity" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer ml-1" title="Hide Altitude Banner">
+      <i data-lucide="x" class="w-3.5 h-3.5"></i>
+    </button>
+  </div>
+
+  <!-- Notification Banner on Computation -->
+  <div id="sim-banner" class="absolute top-32 left-1/2 -translate-x-1/2 z-30 glass-panel px-6 py-3 rounded-2xl flex items-center gap-3 border border-sky-400/40 pointer-events-none">
+    <div class="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center">
+      <i data-lucide="zap" class="w-5 h-5 fill-sky-400"></i>
+    </div>
+    <div>
+      <h3 class="text-xs font-bold text-white flex items-center gap-2">
+        <span>Hydrodynamic Simulation Active</span>
+        <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold" id="banner-latency">5.2ms</span>
+      </h3>
+      <p class="text-[11px] text-slate-300" id="banner-desc">Water plunging downhill along canyon thalweg: 3,700m altitude to 1,380m.</p>
+    </div>
+  </div>
+
+  <!-- Top Navigation Header -->
+  <header class="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
+    <div class="glass-panel px-5 py-3 rounded-2xl pointer-events-auto flex items-center gap-4">
+      <div class="w-10 h-10 rounded-xl bg-[#ebfc72] text-[#13140e] flex items-center justify-center shadow-lg shadow-[#ebfc72]/20">
+        <i data-lucide="waves" class="w-5 h-5 text-[#13140e]"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold tracking-tight text-[#f4f3e8]">FIELD / HYDRO &bull; DIGITAL TWIN</h1>
+          <span class="px-2 py-0.5 text-[10px] font-bold bg-[#ebfc72]/20 text-[#ebfc72] border border-[#ebfc72]/40 rounded-full font-mono">SIH 2026 ATLAS</span>
+        </div>
+        <p class="text-xs text-[rgba(244,243,232,0.7)] font-medium">True Gravity Descent &bull; Nanda Devi Peaks (3,700m) Downhill to Joshimath (1,380m)</p>
+      </div>
+    </div>
+
+    <!-- Map Layer Controls & Status -->
+    <div class="glass-panel px-4 py-2 rounded-2xl pointer-events-auto flex items-center gap-3 text-xs">
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-sky-500/20 border border-sky-500/40 text-sky-300 font-bold">
+        <i data-lucide="mountain" class="w-4 h-4 text-sky-400"></i>
+        <span>3D Terrain: <strong class="text-white">Active (1.6x)</strong></span>
+      </div>
+
+      <!-- 2D Vectors Toggle -->
+      <button id="btn-toggle-vectors" class="px-2.5 py-1.5 rounded-xl bg-sky-600/30 border border-sky-400/50 text-sky-200 hover:text-white font-bold transition flex items-center gap-1.5 cursor-pointer">
+        <i data-lucide="navigation" class="w-3.5 h-3.5 text-sky-400"></i>
+        <span>2D Vectors: <strong id="lbl-vectors-state" class="text-emerald-400">ON</strong></span>
+      </button>
+
+      <div class="h-4 w-px bg-slate-700"></div>
+
+      <!-- Basemap Switcher (with Authenticated Carto HD Basemaps) -->
+      <div class="flex items-center bg-slate-900/90 rounded-xl p-1 border border-slate-700/60">
+        <button id="btn-mode-sat" class="px-2.5 py-1 rounded-lg bg-sky-600 text-white font-medium transition flex items-center gap-1.5 cursor-pointer">
+          <i data-lucide="satellite" class="w-3.5 h-3.5"></i>
+          <span>Satellite 3D</span>
+        </button>
+        <button id="btn-mode-dark" class="px-2.5 py-1 rounded-lg text-slate-300 hover:text-white transition flex items-center gap-1.5 cursor-pointer">
+          <i data-lucide="moon" class="w-3.5 h-3.5"></i>
+          <span>Carto Dark (HD)</span>
+        </button>
+        <button id="btn-mode-voyager" class="px-2.5 py-1 rounded-lg text-slate-300 hover:text-white transition flex items-center gap-1.5 cursor-pointer">
+          <i data-lucide="compass" class="w-3.5 h-3.5"></i>
+          <span>Carto Voyager</span>
+        </button>
+      </div>
+
+      <div class="h-4 w-px bg-slate-700"></div>
+
+      <!-- Full Map Focus View Toggle -->
+      <button id="btn-focus-mode" class="px-2.5 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700/80 text-slate-300 hover:text-white font-medium transition flex items-center gap-1.5 cursor-pointer" title="Hide Sidebars for Maximum Map Visibility">
+        <i id="icon-focus" data-lucide="maximize" class="w-3.5 h-3.5 text-sky-400"></i>
+        <span id="lbl-focus-text">Full Map</span>
+      </button>
+
+      <div class="h-4 w-px bg-slate-700"></div>
+
+      <!-- High-Visibility Zoom In & Zoom Out Controls -->
+      <div class="flex items-center bg-slate-900/90 rounded-xl p-0.5 border border-slate-700/60 font-mono">
+        <button id="btn-zoom-in" class="px-2 py-1 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-bold transition flex items-center gap-1 cursor-pointer" title="Zoom In (+)">
+          <i data-lucide="plus" class="w-3.5 h-3.5 text-sky-400"></i>
+        </button>
+        <div class="h-3 w-px bg-slate-700"></div>
+        <button id="btn-zoom-out" class="px-2 py-1 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-bold transition flex items-center gap-1 cursor-pointer" title="Zoom Out (-)">
+          <i data-lucide="minus" class="w-3.5 h-3.5 text-sky-400"></i>
+        </button>
+        <div class="h-3 w-px bg-slate-700"></div>
+        <button id="btn-reset-3d" class="px-2 py-1 rounded-lg text-slate-300 hover:text-amber-300 hover:bg-slate-800 text-[10px] font-bold transition cursor-pointer" title="Reset North & 3D Pitch">
+          3D
+        </button>
+      </div>
+
+      <div class="h-4 w-px bg-slate-700"></div>
+
+      <!-- Sentinel-1 SAR Overlay Toggle -->
+      <button id="btn-toggle-sar" class="px-2.5 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700/80 text-slate-300 hover:text-white font-medium transition flex items-center gap-1.5 cursor-pointer" title="Toggle Sentinel-1 SAR Validation Overlay">
+        <i data-lucide="radar" class="w-3.5 h-3.5 text-emerald-400"></i>
+        <span>SAR Overlay: <strong id="lbl-sar-state" class="text-rose-400">OFF</strong></span>
+      </button>
+
+      <div class="h-4 w-px bg-slate-700"></div>
+
+      <!-- Export Center Modal Trigger -->
+      <button id="btn-open-export" class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold transition flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/25 active:scale-95">
+        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+        <span>Export</span>
+      </button>
+
+      <div class="h-4 w-px bg-slate-700"></div>
+
+      <!-- Backend Connection Pill -->
+      <div class="flex items-center gap-2 pr-1">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="text-slate-300">API: <strong id="backend-status" class="text-emerald-400 font-mono">Connected (5ms)</strong></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Floating Drawer Handles (visible when sidebars are collapsed) -->
+  <button id="btn-open-left" class="hidden absolute top-24 left-4 z-20 glass-panel px-3.5 py-2 rounded-2xl text-xs font-bold text-sky-300 hover:text-white border border-sky-500/40 shadow-2xl transition flex items-center gap-2 cursor-pointer pointer-events-auto hover:bg-slate-800/90 active:scale-95">
+    <i data-lucide="sliders" class="w-4 h-4 text-sky-400"></i>
+    <span>Parameters</span>
+    <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400"></i>
+  </button>
+
+  <button id="btn-open-right" class="hidden absolute top-24 right-4 z-20 glass-panel px-3.5 py-2 rounded-2xl text-xs font-bold text-rose-300 hover:text-white border border-rose-500/40 shadow-2xl transition flex items-center gap-2 cursor-pointer pointer-events-auto hover:bg-slate-800/90 active:scale-95">
+    <i data-lucide="chevron-left" class="w-3.5 h-3.5 text-slate-400"></i>
+    <span>Analytics</span>
+    <i data-lucide="shield-alert" class="w-4 h-4 text-rose-400"></i>
+  </button>
+
+  <!-- Left Control Panel: Multi-Hazard Scenario Studio -->
+  <aside id="panel-left" class="absolute top-24 left-4 bottom-24 w-84 md:w-88 glass-panel rounded-3xl p-5 z-20 flex flex-col justify-between overflow-y-auto pointer-events-auto transition-all duration-300 shadow-2xl">
+    <div class="space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-700/60 pb-3">
+        <h2 class="text-sm font-semibold tracking-wide uppercase text-slate-200 flex items-center gap-2">
+          <i data-lucide="sliders" class="w-4 h-4 text-sky-400"></i>
+          Multi-Hazard Parameters
+        </h2>
+        <div class="flex items-center gap-1.5">
+          <span class="text-[10px] font-mono text-sky-300 bg-sky-950/80 border border-sky-800 px-2 py-0.5 rounded-md">Coupled SWE</span>
+          <button id="btn-collapse-left" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer" title="Minimize Parameters">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Section 1: Dam & Structure Parameters -->
+      <div class="space-y-2 border-b border-slate-800 pb-3">
+        <div class="flex justify-between items-center">
+          <p class="text-[11px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="building" class="w-3.5 h-3.5"></i>
+            <span>1. Hydraulic Structure</span>
+          </p>
+          <span class="text-[9px] font-mono text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-1.5 py-0.5 rounded">CWC Register</span>
+        </div>
+
+        <!-- 7 Canonical SIH Disaster Scenario Ensembles (S1 - S7) -->
+        <div class="space-y-1.5 bg-slate-950/60 p-2 rounded-2xl border border-amber-500/30">
+          <div class="flex justify-between items-center text-[10px]">
+            <span class="font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1">
+              <i data-lucide="flame" class="w-3 h-3 text-amber-400"></i>
+              <span>Disaster Ensembles (S1-S7)</span>
+            </span>
+            <span class="text-[9px] text-amber-400 font-mono">1-Click Presets</span>
+          </div>
+          <div class="grid grid-cols-4 gap-1 text-[10px] font-mono">
+            <button type="button" class="btn-scenario-preset py-1 px-1 rounded-lg bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white transition text-center font-bold cursor-pointer" data-scenario="S1" title="S1: Partial Breach (Normal Reservoir)">S1: Partial</button>
+            <button type="button" class="btn-scenario-preset py-1 px-1 rounded-lg bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white transition text-center font-bold cursor-pointer" data-scenario="S2" title="S2: Full Breach (Normal Reservoir)">S2: Full</button>
+            <button type="button" class="btn-scenario-preset py-1 px-1 rounded-lg bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white transition text-center font-bold cursor-pointer" data-scenario="S3" title="S3: Full Breach + Extreme Cloudburst 140mm/h">S3: Burst</button>
+            <button type="button" class="btn-scenario-preset py-1 px-1 rounded-lg bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white transition text-center font-bold cursor-pointer" data-scenario="S4" title="S4: Rapid Catastrophic Collapse (<10 min)">S4: Rapid</button>
+          </div>
+          <div class="grid grid-cols-3 gap-1 text-[10px] font-mono">
+            <button type="button" class="btn-scenario-preset py-1 px-1 rounded-lg bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white transition text-center font-bold cursor-pointer" data-scenario="S5" title="S5: Slow Progressive Piping Erosion (60 min)">S5: Piping</button>
+            <button type="button" class="btn-scenario-preset py-1 px-1 rounded-lg bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white transition text-center font-bold cursor-pointer" data-scenario="S6" title="S6: Landslide Blockage Debris Outburst">S6: Outburst</button>
+            <button type="button" class="btn-scenario-preset py-1 px-1 rounded-lg bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white transition text-center font-bold cursor-pointer" data-scenario="S7" title="S7: Controlled Spillway Emergency Release">S7: Spillway</button>
+          </div>
+        </div>
+
+        <!-- Dam Selection with National Basins -->
+        <div class="space-y-1">
+          <label class="text-[10px] text-slate-300 font-semibold flex items-center justify-between">
+            <span>Select Indian River / Dam</span>
+            <span class="text-sky-400 font-mono text-[9px]">10 Benchmark Basins</span>
+          </label>
+          <select id="select-dam" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500 font-medium">
+            <optgroup label="Ganga Basin (Himalayan Headwaters)">
+              <option value="Tapovan Vishnugad Barrage / Dam" selected>Tapovan Vishnugad Barrage (Chamoli)</option>
+              <option value="Rishi Ganga Hydro Project (Barrage)">Rishi Ganga Hydro Barrage (Upper Alaknanda)</option>
+              <option value="Tehri Dam">Tehri Dam (Bhagirathi River, 260m)</option>
+              <option value="Kosi River Landslide Dam (Sun Kosi / Bhote Kosi)">Kosi River Landslide Dam (Debris Blockage)</option>
+            </optgroup>
+            <optgroup label="Narmada Basin">
+              <option value="Sardar Sarovar Dam">Sardar Sarovar Dam (Narmada, 163m)</option>
+            </optgroup>
+            <optgroup label="West Flowing Rivers (Kerala / Western Ghats)">
+              <option value="Idukki Arch Dam">Idukki Arch Dam (Periyar, 169m)</option>
+              <option value="Mullaperiyar Dam">Mullaperiyar Masonry Dam (Periyar, 54m)</option>
+            </optgroup>
+            <optgroup label="Indus & Sutlej Basin">
+              <option value="Bhakra Dam">Bhakra Gravity Dam (Sutlej, 226m)</option>
+            </optgroup>
+            <optgroup label="Mahanadi Basin">
+              <option value="Hirakud Dam">Hirakud Earthen Dam (Mahanadi, 4.8km)</option>
+            </optgroup>
+            <optgroup label="Brahmaputra & Teesta Basin (Eastern Himalayas)">
+              <option value="Chungthang / Teesta III Dam">Chungthang / Teesta III (Sikkim GLOF, 60m)</option>
+            </optgroup>
+          </select>
+        </div>
+
+        <!-- DEM Terrain Elevation Model Selector -->
+        <div class="space-y-1">
+          <label class="text-[10px] text-slate-300 font-semibold flex items-center justify-between">
+            <span class="flex items-center gap-1"><i data-lucide="mountain" class="w-3 h-3 text-sky-400"></i> Terrain Elevation DEM</span>
+            <span id="lbl-terrain-source" class="text-sky-400 font-mono text-[9px]">Copernicus GLO-30</span>
+          </label>
+          <select id="select-terrain" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500 font-medium">
+            <option value="copernicus_30m" selected>Copernicus GLO-30 DEM (ESA Global Standard)</option>
+            <option value="fabdem_30m">FABDEM (Bare-Earth Forest/Buildings Removed)</option>
+            <option value="cartodem_30m">CartoDEM (ISRO Bhuvan Indian Benchmark)</option>
+            <option value="srtm_30m">NASA SRTM 1-ArcSecond (GL1 30m)</option>
+          </select>
+        </div>
+
+        <!-- Auto-Build Any Indian Dam / Custom River Button (Gap 1) -->
+        <button id="btn-open-modal" type="button" class="w-full py-1.5 rounded-xl bg-gradient-to-r from-sky-500/20 to-indigo-500/20 hover:from-sky-500/30 hover:to-indigo-500/30 border border-sky-400/40 text-sky-200 hover:text-white text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-sky-400"></i>
+          <span>+ Auto-Build ANY Indian River / Dam</span>
+        </button>
+
+        <!-- Model View Mode Switcher (Gap 2: SPH vs Delft3D) -->
+        <div class="pt-2 border-t border-slate-800/80">
+          <div class="flex justify-between items-center text-[10px] mb-1">
+            <span class="font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1">
+              <i data-lucide="split" class="w-3 h-3 text-sky-400"></i>
+              <span>Dual Solver Architecture</span>
+            </span>
+            <span class="text-amber-400 font-mono font-bold">SIH Requirement</span>
+          </div>
+          <div class="grid grid-cols-3 gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-700/60 text-[11px]">
+            <button id="btn-mode-sph" type="button" class="py-1 rounded-lg text-slate-400 hover:text-white transition font-medium flex items-center justify-center gap-1 cursor-pointer">
+              <i data-lucide="waves" class="w-3 h-3"></i>
+              <span>SPH</span>
+            </button>
+            <button id="btn-mode-delft3d" type="button" class="py-1 rounded-lg text-slate-400 hover:text-white transition font-medium flex items-center justify-center gap-1 cursor-pointer">
+              <i data-lucide="grid" class="w-3 h-3"></i>
+              <span>Delft3D</span>
+            </button>
+            <button id="btn-mode-compare" type="button" class="py-1 rounded-lg bg-sky-600 text-white transition font-bold flex items-center justify-center gap-1 cursor-pointer shadow">
+              <i data-lucide="scale" class="w-3 h-3"></i>
+              <span>Compare</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Breach Width -->
+        <div class="space-y-0.5">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-300">Breach Bottom Width</span>
+            <span class="font-mono text-sky-400 font-bold"><span id="val-breach-width">50</span> m</span>
+          </div>
+          <input type="range" id="input-breach-width" min="15" max="150" value="50" class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer">
+        </div>
+
+        <!-- Reservoir Head -->
+        <div class="space-y-0.5">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-300">Reservoir Water Depth</span>
+            <span class="font-mono text-sky-400 font-bold"><span id="val-water-level">25</span> m</span>
+          </div>
+          <input type="range" id="input-water-level" min="8" max="35" value="25" class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer">
+        </div>
+      </div>
+
+      <!-- Section 2: Meteorology & Cloudburst -->
+      <div class="space-y-2 border-b border-slate-800 pb-3">
+        <p class="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+          <i data-lucide="cloud-rain" class="w-3.5 h-3.5"></i>
+          <span>2. Meteorology & Cloudburst</span>
+        </p>
+
+        <!-- Rainfall Intensity -->
+        <div class="space-y-0.5">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-300">Rainfall Intensity</span>
+            <span class="font-mono text-amber-400 font-bold"><span id="val-rainfall">80</span> mm/h</span>
+          </div>
+          <input type="range" id="input-rainfall" min="0" max="200" value="80" class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer">
+        </div>
+
+        <!-- Soil Saturation -->
+        <div class="space-y-0.5">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-300">Soil Moisture / Saturation</span>
+            <span class="font-mono text-amber-400 font-bold"><span id="val-soil">70</span>%</span>
+          </div>
+          <input type="range" id="input-soil" min="10" max="100" value="70" class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer">
+        </div>
+      </div>
+
+      <!-- Section 3: Landslide Dam & Debris Slurry -->
+      <div class="space-y-2 border-b border-slate-800 pb-3">
+        <p class="text-[11px] font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+          <i data-lucide="mountain-snow" class="w-3.5 h-3.5"></i>
+          <span>3. Landslide Dam & Slurry Physics</span>
+        </p>
+
+        <!-- Landslide Volume -->
+        <div class="space-y-0.5">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-300">Landslide Dam Storage</span>
+            <span class="font-mono text-rose-400 font-bold"><span id="val-landslide">2.5</span> MCM</span>
+          </div>
+          <input type="range" id="input-landslide" min="0" max="80" value="25" class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer">
+        </div>
+
+        <!-- Failure Mode Toggle -->
+        <div class="flex items-center justify-between text-xs pt-1">
+          <span class="text-slate-300">Breach Mechanism:</span>
+          <div class="flex gap-2">
+            <label class="flex items-center gap-1 text-[11px] text-slate-200 cursor-pointer">
+              <input type="radio" name="failure_mode" value="overtopping" checked class="accent-sky-500"> Overtopping
+            </label>
+            <label class="flex items-center gap-1 text-[11px] text-rose-300 cursor-pointer">
+              <input type="radio" name="failure_mode" value="piping" class="accent-rose-500"> Piping (Blowout)
+            </label>
+          </div>
+        </div>
+
+        <!-- Debris Concentration -->
+        <div class="space-y-0.5 pt-1">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-300">Debris / Sediment Load</span>
+            <span class="font-mono text-rose-400 font-bold"><span id="val-sediment">25</span>% (Slurry)</span>
+          </div>
+          <input type="range" id="input-sediment" min="0" max="50" value="25" class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer">
+        </div>
+      </div>
+
+      <!-- Section 4: Cascade & HADR Evacuation -->
+      <div class="space-y-2 pb-1">
+        <p class="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+          <span>4. Domino Cascade & HADR Evacuation</span>
+        </p>
+
+        <!-- Cascading Toggle -->
+        <div class="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-900 border border-slate-800">
+          <div>
+            <span class="font-medium text-slate-200">Cascade Downstream Barrage</span>
+            <p class="text-[10px] text-slate-400">Trigger secondary Tapovan collapse</p>
+          </div>
+          <input type="checkbox" id="check-cascade" checked class="w-4 h-4 accent-sky-500 cursor-pointer">
+        </div>
+
+        <!-- Early Warning Lead Time -->
+        <div class="space-y-0.5 pt-1">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-300">Early Warning Lead Time</span>
+            <span class="font-mono text-emerald-400 font-bold"><span id="val-warning">20</span> min</span>
+          </div>
+          <input type="range" id="input-warning" min="0" max="45" value="20" class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer">
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button id="btn-simulate" class="w-full py-3 rounded-xl bg-gradient-to-r from-sky-500 via-sky-600 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs tracking-wide shadow-xl shadow-sky-500/30 transition active:scale-[0.98] flex items-center justify-center gap-2 border border-sky-300/40">
+        <i data-lucide="play" class="w-4 h-4 fill-white"></i>
+        <span>Compute Multi-Hazard Simulation</span>
+      </button>
+    </div>
+
+    <!-- Provenance Note -->
+    <div class="pt-2 border-t border-slate-800 text-[10px] text-slate-400 flex items-center justify-between font-mono">
+      <span>Coupled SPH &bull; Delft3D</span>
+      <span class="text-emerald-400 font-bold">&lt;10ms Physics</span>
+    </div>
+  </aside>
+
+  <!-- Right Impact & HADR Intelligence HUD -->
+  <aside id="panel-right" class="absolute top-24 right-4 w-80 md:w-84 glass-panel rounded-3xl p-5 z-20 space-y-4 pointer-events-auto transition-all duration-300 shadow-2xl max-h-[calc(100vh-8rem)] overflow-y-auto">
+    <div class="flex items-center justify-between border-b border-slate-700/60 pb-3">
+      <div class="flex items-center gap-2">
+        <button id="btn-collapse-right" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer" title="Minimize Analytics">
+          <i data-lucide="chevron-right" class="w-4 h-4"></i>
+        </button>
+        <h2 class="text-sm font-semibold tracking-wide uppercase text-slate-200 flex items-center gap-1.5">
+          <i data-lucide="shield-alert" class="w-4 h-4 text-rose-400"></i>
+          <span>Impact Intel</span>
+        </h2>
+      </div>
+      <span class="px-2 py-0.5 text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full font-bold">HADR HUD</span>
+    </div>
+
+    <!-- Primary KPIs Grid -->
+    <div class="grid grid-cols-2 gap-2.5">
+      <div class="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60">
+        <p class="text-[10px] text-slate-400 font-semibold uppercase">Compound Peak Q</p>
+        <p id="kpi-discharge" class="text-lg font-bold font-mono text-sky-400 mt-0.5">8,450 <span class="text-xs font-normal text-slate-400">m³/s</span></p>
+      </div>
+      <div class="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60">
+        <p class="text-[10px] text-slate-400 font-semibold uppercase">Slurry Density</p>
+        <p id="kpi-density" class="text-lg font-bold font-mono text-amber-300 mt-0.5">1,412 <span class="text-xs font-normal text-slate-400">kg/m³</span></p>
+      </div>
+      <div class="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60">
+        <p class="text-[10px] text-slate-400 font-semibold uppercase">Bridge Impact Force</p>
+        <p id="kpi-force" class="text-lg font-bold font-mono text-rose-400 mt-0.5">1,120 <span class="text-xs font-normal text-slate-400">kPa</span></p>
+      </div>
+      <div class="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60">
+        <p class="text-[10px] text-slate-400 font-semibold uppercase">Severed Roads</p>
+        <p id="kpi-roads" class="text-lg font-bold font-mono text-cyan-400 mt-0.5">2.5 <span class="text-xs font-normal text-slate-400">km</span></p>
+      </div>
+    </div>
+
+    <!-- HADR Evacuation & Population Safety Card -->
+    <div class="p-3 rounded-2xl bg-slate-900/90 border border-emerald-500/30 space-y-2">
+      <div class="flex items-center justify-between text-xs">
+        <span class="font-bold text-emerald-400 flex items-center gap-1.5">
+          <i data-lucide="users" class="w-3.5 h-3.5"></i>
+          <span>Evacuation Efficiency</span>
+        </span>
+        <span class="text-[10px] text-slate-300 font-mono">Lead Time: <strong id="lbl-lead-time" class="text-white">20m</strong></span>
+      </div>
+      <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden flex">
+        <div id="bar-evac" class="bg-emerald-400 h-full transition-all duration-500" style="width: 58%"></div>
+        <div id="bar-risk" class="bg-rose-500 h-full transition-all duration-500" style="width: 42%"></div>
+      </div>
+      <div class="flex justify-between text-[11px] font-mono">
+        <span class="text-emerald-400">Evacuated: <strong id="kpi-evac">1,980</strong></span>
+        <span class="text-rose-400">In Jeopardy: <strong id="kpi-risk">1,420</strong></span>
+      </div>
+    </div>
+
+    <!-- Isolated Settlements List -->
+    <div class="space-y-1.5">
+      <div class="flex items-center justify-between text-xs font-semibold text-slate-200">
+        <span>Cut-off Settlements</span>
+        <span id="badge-villages-count" class="px-2 py-0.5 bg-rose-500/20 text-rose-400 rounded-md text-[10px] font-bold">2 Identified</span>
+      </div>
+      <div id="list-isolated-villages" class="space-y-1.5 max-h-24 overflow-y-auto pr-1">
+        <div class="p-2 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+            <span class="font-medium text-slate-200">Raini (Bridge Demolished)</span>
+          </div>
+          <span class="text-[10px] text-rose-400 font-mono font-bold">T+30m</span>
+        </div>
+        <div class="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span class="font-medium text-slate-200">Tapovan (Barrage Inundated)</span>
+          </div>
+          <span class="text-[10px] text-amber-400 font-mono font-bold">T+55m</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SPH vs Delft3D Discrepancy Matrix Card (Gap 2) -->
+    <div id="card-comparison" class="p-3.5 rounded-2xl bg-slate-900/95 border border-amber-500/40 space-y-2.5 shadow-xl">
+      <div class="flex items-center justify-between text-xs">
+        <span class="font-bold text-amber-300 flex items-center gap-1.5">
+          <i data-lucide="scale" class="w-4 h-4 text-amber-400"></i>
+          <span>SPH vs Delft3D Discrepancy</span>
+        </span>
+        <span class="text-[9px] text-amber-300 font-mono font-bold bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/40">SIH Benchmark</span>
+      </div>
+
+      <!-- Discrepancy Table -->
+      <div class="grid grid-cols-3 gap-1.5 text-center text-[10px] font-mono">
+        <div class="p-2 rounded-xl bg-slate-800/80 border border-slate-700">
+          <p class="text-slate-400">Depth Δh</p>
+          <p id="diff-delta-h" class="text-sm font-bold text-amber-400">+1.85 m</p>
+          <span class="text-[9px] text-slate-400">SPH Surge</span>
+        </div>
+        <div class="p-2 rounded-xl bg-slate-800/80 border border-slate-700">
+          <p class="text-slate-400">Velocity Δv</p>
+          <p id="diff-delta-v" class="text-sm font-bold text-sky-400">+2.4 m/s</p>
+          <span class="text-[9px] text-slate-400">SPH Faster</span>
+        </div>
+        <div class="p-2 rounded-xl bg-slate-800/80 border border-slate-700">
+          <p class="text-slate-400">Spatial IoU</p>
+          <p id="diff-iou" class="text-sm font-bold text-emerald-400">81.4%</p>
+          <span class="text-[9px] text-slate-400">Jaccard Overlap</span>
+        </div>
+      </div>
+
+      <!-- Zone Classification Legend -->
+      <div class="space-y-1 text-[11px] font-mono border-t border-slate-800 pt-2">
+        <div class="flex justify-between items-center text-slate-300">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span>Concordant (High Conf):</span>
+          </span>
+          <strong id="diff-concordant-area" class="text-emerald-400">3.82 km²</strong>
+        </div>
+        <div class="flex justify-between items-center text-slate-300">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span>SPH-Dominant (Splash):</span>
+          </span>
+          <strong id="diff-sph-area" class="text-amber-400">0.45 km²</strong>
+        </div>
+        <div class="flex justify-between items-center text-slate-300">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+            <span>Delft3D (Diffusive Wetting):</span>
+          </span>
+          <strong id="diff-delft-area" class="text-indigo-400">0.68 km²</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sentinel-1 SAR Satellite Validation Card (Research Upgrade) -->
+    <div id="card-satellite" class="p-3.5 rounded-2xl bg-slate-900/95 border border-emerald-500/40 space-y-2.5 shadow-xl">
+      <div class="flex items-center justify-between text-xs">
+        <span class="font-bold text-emerald-300 flex items-center gap-1.5">
+          <i data-lucide="satellite" class="w-4 h-4 text-emerald-400"></i>
+          <span>Sentinel-1 SAR Validation</span>
+        </span>
+        <span id="badge-sat-status" class="text-[9px] text-emerald-300 font-mono font-bold bg-emerald-500/20 px-1.5 py-0.5 rounded border border-emerald-500/40">Radar Calibrated</span>
+      </div>
+
+      <!-- SAR Metrics -->
+      <div class="grid grid-cols-3 gap-1.5 text-center text-[10px] font-mono">
+        <div class="p-2 rounded-xl bg-slate-800/80 border border-slate-700">
+          <p class="text-slate-400">CSI Score</p>
+          <p id="sat-csi" class="text-sm font-bold text-emerald-400">84.2%</p>
+          <span class="text-[8px] text-slate-400">Success Index</span>
+        </div>
+        <div class="p-2 rounded-xl bg-slate-800/80 border border-slate-700">
+          <p class="text-slate-400">F1 Score</p>
+          <p id="sat-f1" class="text-sm font-bold text-teal-400">0.914</p>
+          <span class="text-[8px] text-slate-400">Harmonic Mean</span>
+        </div>
+        <div class="p-2 rounded-xl bg-slate-800/80 border border-slate-700">
+          <p class="text-slate-400">WSE R²</p>
+          <p id="sat-r2" class="text-sm font-bold text-sky-400">0.895</p>
+          <span class="text-[8px] text-slate-400">Correlation</span>
+        </div>
+      </div>
+
+      <!-- SAR Confusion Area Legend -->
+      <div class="space-y-1 text-[11px] font-mono border-t border-slate-800 pt-2">
+        <div class="flex justify-between items-center text-slate-300">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span>True Positive (Concordant):</span>
+          </span>
+          <strong id="sat-tp-area" class="text-emerald-400">3.75 km²</strong>
+        </div>
+        <div class="flex justify-between items-center text-slate-300">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+            <span>False Positive (Overprediction):</span>
+          </span>
+          <strong id="sat-fp-area" class="text-rose-400">0.38 km²</strong>
+        </div>
+        <div class="flex justify-between items-center text-slate-300">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span>False Negative (Missed):</span>
+          </span>
+          <strong id="sat-fn-area" class="text-amber-400">0.32 km²</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- HADR Quantitative Loss & Damage Assessment Card -->
+    <div id="card-damage" class="p-3.5 rounded-2xl bg-slate-900/95 border border-rose-500/40 space-y-2.5 shadow-xl">
+      <div class="flex items-center justify-between text-xs">
+        <span class="font-bold text-rose-300 flex items-center gap-1.5">
+          <i data-lucide="shield-alert" class="w-4 h-4 text-rose-400"></i>
+          <span>HADR Damage Assessment</span>
+        </span>
+        <span id="badge-ndma-priority" class="text-[9px] text-rose-300 font-mono font-bold bg-rose-500/20 px-1.5 py-0.5 rounded border border-rose-500/40">SEVERE ORANGE</span>
+      </div>
+
+      <!-- Financial Totals -->
+      <div class="grid grid-cols-2 gap-2 text-[11px] font-mono">
+        <div class="p-2 rounded-xl bg-rose-950/40 border border-rose-800/60">
+          <span class="text-slate-400 text-[10px]">Est. Economic Loss</span>
+          <p id="dmg-total-loss" class="text-base font-bold text-rose-400">₹ 84.50 Cr</p>
+        </div>
+        <div class="p-2 rounded-xl bg-slate-800/80 border border-slate-700">
+          <span class="text-slate-400 text-[10px]">Expected Annual (EAD)</span>
+          <p id="dmg-ead" class="text-base font-bold text-amber-400">₹ 6.93 Cr</p>
+        </div>
+      </div>
+
+      <!-- Critical Infrastructure Damage List -->
+      <div class="space-y-1 text-[11px] font-mono border-t border-slate-800 pt-2" id="list-damage-assets">
+        <div class="flex justify-between items-center text-slate-300">
+          <span>Roads Severed:</span>
+          <strong id="dmg-roads-stat" class="text-rose-400">14.8 km (₹ 27.4 Cr)</strong>
+        </div>
+        <div class="flex justify-between items-center text-slate-300">
+          <span>Bridges Severed:</span>
+          <strong id="dmg-bridges-stat" class="text-rose-400">3 Units (₹ 37.5 Cr)</strong>
+        </div>
+        <div class="flex justify-between items-center text-slate-300">
+          <span>Hospitals / Clinics:</span>
+          <strong id="dmg-hospitals-stat" class="text-amber-400">2 Inundated</strong>
+        </div>
+        <div class="flex justify-between items-center text-slate-300">
+          <span>Power Substations:</span>
+          <strong id="dmg-substations-stat" class="text-amber-400">1 Submerged</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2D Multi-Directional Hydrodynamics Card -->
+    <div class="p-3 rounded-2xl bg-slate-900/90 border border-sky-500/30 space-y-2">
+      <div class="flex items-center justify-between text-xs">
+        <span class="font-bold text-sky-400 flex items-center gap-1.5">
+          <i data-lucide="git-branch" class="w-3.5 h-3.5"></i>
+          <span>Multi-Directional Flow</span>
+        </span>
+        <span class="text-[10px] text-sky-300 font-mono bg-sky-950/80 px-2 py-0.5 rounded border border-sky-800">2D Shallow Water</span>
+      </div>
+      <div class="space-y-1.5 text-[11px] font-mono">
+        <div class="flex justify-between items-center text-slate-300">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+            <span>Downstream Main Stem:</span>
+          </span>
+          <strong id="multi-downstream-pct" class="text-sky-300 font-bold">80%</strong>
+        </div>
+        <div class="flex justify-between items-center text-slate-300">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span>Confluence Backwater Surge:</span>
+          </span>
+          <strong id="multi-backwater-pct" class="text-amber-300 font-bold">14% (1.5km)</strong>
+        </div>
+        <div class="flex justify-between items-center text-slate-300">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-fuchsia-400"></span>
+            <span>Lateral Overbank Spreading:</span>
+          </span>
+          <strong id="multi-lateral-pct" class="text-fuchsia-300 font-bold">6%</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Propagation Timeline Log -->
+    <div class="space-y-1">
+      <p class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+        <i data-lucide="clock" class="w-3.5 h-3.5 text-sky-400"></i>
+        <span>Canyon Progression Log</span>
+      </p>
+      <div id="event-log" class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] font-mono text-slate-300 space-y-1">
+        <p class="text-emerald-400">&bull; T+00m: Avalanche & breach at Raunthi Gad (3,700m)</p>
+        <p class="text-sky-300">&bull; T+30m: Wave impacts Raini bridge (1,980m)</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Bottom Temporal Playback Scrubber -->
+  <footer class="absolute bottom-6 left-1/2 -translate-x-1/2 w-11/12 max-w-2xl glass-panel rounded-3xl px-5 py-3.5 z-20 pointer-events-auto flex items-center gap-5">
+    <button id="btn-play-toggle" class="w-10 h-10 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white flex items-center justify-center shadow-lg shadow-sky-500/30 transition active:scale-95">
+      <i id="icon-play" data-lucide="play" class="w-5 h-5 fill-white"></i>
+    </button>
+    
+    <div class="flex-1 space-y-1">
+      <div class="flex justify-between items-center text-xs">
+        <span class="font-bold text-slate-200 flex items-center gap-1.5">
+          <i data-lucide="history" class="w-4 h-4 text-sky-400"></i>
+          Flood Propagation: <strong id="playback-time" class="text-sky-400 font-mono text-sm ml-1">T+30 min</strong>
+        </span>
+        <span class="text-[10px] text-slate-400 font-mono font-semibold">Canyon Speed ~14 m/s</span>
+      </div>
+      <input type="range" id="playback-slider" min="0" max="60" step="15" value="30" class="w-full h-2 bg-slate-700 rounded-lg cursor-pointer">
+    </div>
+
+    <!-- Perspective Camera Presets: Downhill Chase Cam & Looking Uphill -->
+    <div class="flex items-center gap-1.5 border-l border-slate-700/80 pl-3">
+      <button id="btn-cam-downhill" class="px-2.5 py-1.5 rounded-xl bg-sky-700/80 text-[11px] font-bold hover:bg-sky-600 text-white transition flex items-center gap-1">
+        <i data-lucide="eye" class="w-3 h-3"></i>
+        <span>Chase Cam (Downhill)</span>
+      </button>
+      <button id="btn-cam-uphill" class="px-2.5 py-1.5 rounded-xl bg-slate-800 text-[11px] font-semibold hover:bg-slate-700 text-slate-200 transition">
+        <span>Looking Uphill</span>
+      </button>
+    </div>
+  </footer>
+
+  <script>
+    lucide.createIcons();
+
+    // High-Precision Satellite Style with Official High-Contrast Labels
+    const SAT_STYLE = {
+      version: 8,
+      sources: {
+        'satellite-tiles': {
+          type: 'raster',
+          tiles: [
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+          ],
+          tileSize: 256,
+          maxzoom: 19
+        },
+        'labels-tiles': {
+          type: 'raster',
+          tiles: [
+            'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'
+          ],
+          tileSize: 256,
+          maxzoom: 19
+        },
+        'terrainSource': {
+          type: 'raster-dem',
+          tiles: [
+            'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
+          ],
+          encoding: 'terrarium',
+          tileSize: 256,
+          minzoom: 0,
+          maxzoom: 12
+        }
+      },
+      layers: [
+        {
+          id: 'satellite-layer',
+          type: 'raster',
+          source: 'satellite-tiles',
+          minzoom: 0,
+          maxzoom: 19
+        },
+        {
+          id: 'labels-layer',
+          type: 'raster',
+          source: 'labels-tiles',
+          minzoom: 0,
+          maxzoom: 19
+        }
+      ],
+      terrain: {
+        source: 'terrainSource',
+        exaggeration: 1.6
+      },
+      sky: {
+        'sky-color': '#030712',
+        'horizon-color': '#1e293b',
+        'fog-color': '#0f172a'
+      }
+    };
+
+    const CARTO_API_KEY = 'cb1_3z04_1_d7a616a5743dcd5dac572509';
+
+    // Authenticated High-Definition Carto Dark Matter Style (@2x Retina Tiles)
+    const DARK_STYLE = {
+      version: 8,
+      sources: {
+        'dark-tiles': {
+          type: 'raster',
+          tiles: [
+            `https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png?api_key=${CARTO_API_KEY}`
+          ],
+          tileSize: 256,
+          maxzoom: 19
+        },
+        'terrainSource': {
+          type: 'raster-dem',
+          tiles: [
+            'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
+          ],
+          encoding: 'terrarium',
+          tileSize: 256,
+          minzoom: 0,
+          maxzoom: 12
+        }
+      },
+      layers: [
+        {
+          id: 'dark-layer',
+          type: 'raster',
+          source: 'dark-tiles',
+          minzoom: 0,
+          maxzoom: 19
+        }
+      ],
+      terrain: {
+        source: 'terrainSource',
+        exaggeration: 1.6
+      },
+      sky: {
+        'sky-color': '#020617',
+        'horizon-color': '#0f172a',
+        'fog-color': '#020617'
+      }
+    };
+
+    // Authenticated High-Definition Carto Voyager Style (@2x Retina Tiles)
+    const VOYAGER_STYLE = {
+      version: 8,
+      sources: {
+        'voyager-tiles': {
+          type: 'raster',
+          tiles: [
+            `https://basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}@2x.png?api_key=${CARTO_API_KEY}`
+          ],
+          tileSize: 256,
+          maxzoom: 19
+        },
+        'terrainSource': {
+          type: 'raster-dem',
+          tiles: [
+            'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
+          ],
+          encoding: 'terrarium',
+          tileSize: 256,
+          minzoom: 0,
+          maxzoom: 12
+        }
+      },
+      layers: [
+        {
+          id: 'voyager-layer',
+          type: 'raster',
+          source: 'voyager-tiles',
+          minzoom: 0,
+          maxzoom: 19
+        }
+      ],
+      terrain: {
+        source: 'terrainSource',
+        exaggeration: 1.6
+      }
+    };
+
+    // Initialize Camera Positioned HIGH BEHIND NANDA DEVI (3,700m) Looking DOWNHILL North-West towards Joshimath
+    // Bearing 320° puts the high peaks at the bottom/foreground of the screen and the downhill river flowing FORWARD!
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: SAT_STYLE,
+      center: [79.670, 30.490],
+      zoom: 12.3,
+      pitch: 62, // Looking forward and downhill along the canyon
+      bearing: 318, // Camera oriented along downhill valley descent direction (North-West)
+      maxPitch: 75,
+      canvasContextAttributes: { antialias: true }
+    });
+
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-left');
+
+    document.getElementById('btn-zoom-in')?.addEventListener('click', () => map.zoomIn());
+    document.getElementById('btn-zoom-out')?.addEventListener('click', () => map.zoomOut());
+    document.getElementById('btn-reset-3d')?.addEventListener('click', () => map.resetNorthPitch());
+
+    let currentSimulation = null;
+    let isPlaying = false;
+    let playInterval = null;
+
+    // Surveyed Riverbed Thalweg Waypoints (Altitude descending strictly from 3,700m to 1,380m)
+    const valleyThalweg = [
+      [79.728, 30.385], // 3,700m: Avalanche Origin
+      [79.718, 30.405], // 3,350m: Raunthi Gad
+      [79.708, 30.428], // 2,980m: Upper Gorge
+      [79.700, 30.452], // 2,640m: Canyon Bend
+      [79.694, 30.472], // 2,350m: Rishi Ganga Chasm
+      [79.692, 30.485], // 2,120m: Approach to Bridge
+      [79.690, 30.490], // 1,980m: Raini Confluence
+      [79.684, 30.496], // 1,940m: Peng Bend
+      [79.673, 30.505], // 1,910m: Suraithota Gorge
+      [79.658, 30.513], // 1,870m: Valley Constriction
+      [79.642, 30.520], // 1,840m: Tunnel Approach
+      [79.624, 30.528], // 1,800m: Tapovan Vishnugad Barrage
+      [79.605, 30.536], // 1,680m: Dhak Gorge
+      [79.585, 30.544], // 1,540m: Helang Mountain Bend
+      [79.565, 30.552]  // 1,380m: Alaknanda Confluence
+    ];
+
+    function makeCanyonPolygon(reachIdx, widthM = 60) {
+      const active = valleyThalweg.slice(0, reachIdx + 1);
+      const halfWidthDeg = (widthM / 2.0) * 0.0000095;
+      
+      const left = [];
+      const right = [];
+
+      for (let i = 0; i < active.length; i++) {
+        let dx, dy;
+        if (i < active.length - 1) {
+          dx = active[i+1][0] - active[i][0];
+          dy = active[i+1][1] - active[i][1];
+        } else {
+          dx = active[i][0] - active[i-1][0];
+          dy = active[i][1] - active[i-1][1];
+        }
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len;
+        const ny = dx / len;
+
+        left.push([active[i][0] + nx * halfWidthDeg, active[i][1] + ny * halfWidthDeg]);
+        right.push([active[i][0] - nx * halfWidthDeg, active[i][1] - ny * halfWidthDeg]);
+      }
+      return [left.concat(right.reverse()).concat([left[0]])];
+    }
+
+    // High-Contrast 3D Billboard Markers Placed on Terrain
+    const landmarks = [
+      { name: "🏔️ Nanda Devi Peak (7,816m)", coords: [79.970, 30.375], type: "marker-peak" },
+      { name: "🌊 Avalanche Origin (3,700m)", coords: [79.728, 30.385], type: "marker-origin" },
+      { name: "🏘️ Raini Village (1,980m)", coords: [79.690, 30.490], type: "marker-village" },
+      { name: "🔀 Raini Confluence • Upstream Backwater Surge", coords: [79.704, 30.500], type: "marker-bifurcation" },
+      { name: "🏗️ Tapovan Vishnugad Barrage (1,800m)", coords: [79.624, 30.528], type: "marker-barrage" },
+      { name: "🏙️ Joshimath Safe Hub (1,875m)", coords: [79.565, 30.552], type: "marker-safe" }
+    ];
+
+    function add3DLandmarkMarkers() {
+      landmarks.forEach(lm => {
+        const el = document.createElement('div');
+        el.className = `marker-3d ${lm.type}`;
+        el.innerText = lm.name;
+        el.addEventListener('click', () => {
+          map.flyTo({ center: lm.coords, zoom: 13.8, pitch: 68, duration: 1500 });
+        });
+        new maplibregl.Marker({ element: el })
+          .setLngLat(lm.coords)
+          .addTo(map);
+      });
+    }
+
+    function setupCustomLayers() {
+      // 1. Dynamic Flood Water Layer
+      if (!map.getSource('flood-wave')) {
+        map.addSource('flood-wave', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: [{
+              type: 'Feature',
+              geometry: {
+                type: 'Polygon',
+                coordinates: makeCanyonPolygon(7, 85)
+              }
+            }]
+          }
+        });
+
+        // 3D Translucent Water Body
+        map.addLayer({
+          id: 'flood-fill',
+          type: 'fill',
+          source: 'flood-wave',
+          paint: {
+            'fill-color': '#0284c7',
+            'fill-opacity': 0.88
+          }
+        });
+
+        // Glowing Crest Contour Line
+        map.addLayer({
+          id: 'flood-edge',
+          type: 'line',
+          source: 'flood-wave',
+          paint: {
+            'line-color': '#38bdf8',
+            'line-width': 4.5,
+            'line-blur': 1.5
+          }
+        });
+      }
+
+      // 2. 2D Multi-Directional Flow Velocity Vectors Layer
+      if (!map.getSource('flow-vectors')) {
+        map.addSource('flow-vectors', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: []
+          }
+        });
+
+        // Directional Heading Arrows (▲ rotated by bearing_deg)
+        map.addLayer({
+          id: 'flow-vectors-layer',
+          type: 'symbol',
+          source: 'flow-vectors',
+          layout: {
+            'text-field': '▲',
+            'text-size': [
+              'interpolate', ['linear'], ['get', 'velocity_mps'],
+              2, 14,
+              16, 22
+            ],
+            'text-rotate': ['get', 'bearing_deg'],
+            'text-rotation-alignment': 'map',
+            'text-allow-overlap': true,
+            'text-ignore-placement': true
+          },
+          paint: {
+            'text-color': [
+              'match', ['get', 'flow_type'],
+              'downstream', '#38bdf8',
+              'backwater', '#f59e0b',
+              'lateral', '#e879f9',
+              '#38bdf8'
+            ],
+            'text-halo-color': '#020617',
+            'text-halo-width': 2.0
+          }
+        });
+
+        // Interactive hover tooltip on vectors
+        const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 12 });
+        map.on('mouseenter', 'flow-vectors-layer', (e) => {
+          map.getCanvas().style.cursor = 'pointer';
+          const coordinates = e.features[0].geometry.coordinates.slice();
+          const props = e.features[0].properties;
+          const color = props.flow_type === 'backwater' ? '#f59e0b' : (props.flow_type === 'lateral' ? '#e879f9' : '#38bdf8');
+          popup.setLngLat(coordinates)
+            .setHTML(`
+              <div class="px-2.5 py-1.5 bg-slate-900/95 text-white border border-slate-700 rounded-xl text-[11px] font-mono shadow-xl">
+                <p style="color: ${color}; font-weight: bold;">${props.label}</p>
+                <p class="text-slate-300">Bearing: <strong>${props.bearing_deg}&deg;</strong> | Speed: <strong>${props.velocity_mps} m/s</strong></p>
+              </div>
+            `)
+            .addTo(map);
+        });
+        map.on('mouseleave', 'flow-vectors-layer', () => {
+          map.getCanvas().style.cursor = '';
+          popup.remove();
+        });
+      }
+
+      // 3. Dual-Engine Discrepancy Matrix (SPH vs Delft3D Comparison) Layer
+      if (!map.getSource('flood-diff')) {
+        map.addSource('flood-diff', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: []
+          }
+        });
+
+        map.addLayer({
+          id: 'flood-diff-fill',
+          type: 'fill',
+          source: 'flood-diff',
+          paint: {
+            'fill-color': [
+              'match', ['get', 'zone'],
+              'concordant', '#10b981',
+              'sph_dominant', '#f97316',
+              'delft3d_dominant', '#6366f1',
+              '#10b981'
+            ],
+            'fill-opacity': 0.85
+          }
+        });
+
+        map.addLayer({
+          id: 'flood-diff-line',
+          type: 'line',
+          source: 'flood-diff',
+          paint: {
+            'line-color': [
+              'match', ['get', 'zone'],
+              'concordant', '#34d399',
+              'sph_dominant', '#fb923c',
+              'delft3d_dominant', '#818cf8',
+              '#ffffff'
+            ],
+            'line-width': 2.5
+          }
+        });
+      }
+
+      // 4. Sentinel-1 SAR Satellite Validation Confusion Layer (TP, FP, FN)
+      if (!map.getSource('sar-confusion')) {
+        map.addSource('sar-confusion', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: []
+          }
+        });
+
+        map.addLayer({
+          id: 'sar-confusion-fill',
+          type: 'fill',
+          source: 'sar-confusion',
+          layout: { 'visibility': 'none' },
+          paint: {
+            'fill-color': [
+              'match', ['get', 'classification'],
+              'true_positive', '#10b981',
+              'false_positive', '#f43f5e',
+              'false_negative', '#f59e0b',
+              '#10b981'
+            ],
+            'fill-opacity': 0.75
+          }
+        });
+
+        map.addLayer({
+          id: 'sar-confusion-line',
+          type: 'line',
+          source: 'sar-confusion',
+          layout: { 'visibility': 'none' },
+          paint: {
+            'line-color': '#ffffff',
+            'line-width': 1.8
+          }
+        });
+      }
+
+      // 5. Load Real OSM Infrastructure
+      fetch('http://127.0.0.1:8000/api/v1/impacts/infrastructure-layer')
+        .then(res => res.json())
+        .then(data => {
+          if (!map.getSource('osm-infra')) {
+            map.addSource('osm-infra', {
+              type: 'geojson',
+              data: data
+            });
+
+            // Roads Layer
+            map.addLayer({
+              id: 'roads-line',
+              type: 'line',
+              source: 'osm-infra',
+              filter: ['==', 'asset_type', 'road'],
+              paint: {
+                'line-color': '#fbbf24',
+                'line-width': 3.0,
+                'line-opacity': 0.95
+              }
+            });
+
+            // Settlement Point Markers
+            map.addLayer({
+              id: 'villages-pts',
+              type: 'circle',
+              source: 'osm-infra',
+              filter: ['==', 'asset_type', 'settlement'],
+              paint: {
+                'circle-radius': 7.5,
+                'circle-color': '#f43f5e',
+                'circle-stroke-width': 2.5,
+                'circle-stroke-color': '#ffffff'
+              }
+            });
+          }
+        })
+        .catch(err => console.log('Using local fallback infrastructure'));
+    }
+
+    map.on('load', () => {
+      setupCustomLayers();
+      add3DLandmarkMarkers();
+      runSimulation();
+    });
+
+    // Basemap Switcher Listeners
+    const btnSat = document.getElementById('btn-mode-sat');
+    const btnDark = document.getElementById('btn-mode-dark');
+    const btnVoyager = document.getElementById('btn-mode-voyager');
+
+    function setActiveBasemap(activeBtn) {
+      [btnSat, btnDark, btnVoyager].forEach(b => {
+        b.className = 'px-2.5 py-1 rounded-lg text-slate-300 hover:text-white transition flex items-center gap-1.5 cursor-pointer';
+      });
+      activeBtn.className = 'px-2.5 py-1 rounded-lg bg-sky-600 text-white font-medium transition flex items-center gap-1.5 cursor-pointer';
+    }
+
+    btnSat.addEventListener('click', () => {
+      map.setStyle(SAT_STYLE);
+      setActiveBasemap(btnSat);
+      map.once('style.load', setupCustomLayers);
+    });
+
+    btnDark.addEventListener('click', () => {
+      map.setStyle(DARK_STYLE);
+      setActiveBasemap(btnDark);
+      map.once('style.load', setupCustomLayers);
+    });
+
+    btnVoyager.addEventListener('click', () => {
+      map.setStyle(VOYAGER_STYLE);
+      setActiveBasemap(btnVoyager);
+      map.once('style.load', setupCustomLayers);
+    });
+
+    // Sliders Data Binding
+    const bindSlider = (id, valId, suffix = '') => {
+      document.getElementById(id).addEventListener('input', (e) => {
+        document.getElementById(valId).innerText = e.target.value + suffix;
+      });
+    };
+    bindSlider('input-breach-width', 'val-breach-width');
+    bindSlider('input-water-level', 'val-water-level');
+    bindSlider('input-rainfall', 'val-rainfall');
+    bindSlider('input-soil', 'val-soil');
+    bindSlider('input-sediment', 'val-sediment');
+    bindSlider('input-warning', 'val-warning');
+    
+    document.getElementById('input-landslide').addEventListener('input', (e) => {
+      document.getElementById('val-landslide').innerText = (e.target.value / 10).toFixed(1);
+    });
+
+    function showBanner(sim) {
+      const banner = document.getElementById('sim-banner');
+      document.getElementById('banner-latency').innerText = `${sim.latency_ms} ms`;
+      document.getElementById('banner-desc').innerText = `Peak Q: ${sim.compound_peak_discharge_m3s.toLocaleString()} m³/s | Density: ${sim.fluid_density_kg_m3} kg/m³ | Evacuated: ${sim.impact_summary.evacuated_population}`;
+      banner.classList.add('active');
+      setTimeout(() => { banner.classList.remove('active'); }, 4000);
+    }
+
+    // Model Mode & Custom Dam State
+    let currentModelMode = 'compare'; // 'compare', 'sph', or 'delft3d'
+    let currentCustomDam = null;
+    let activeScenarioPreset = null;
+
+    const DAM_COORDINATES = {
+      'Tapovan Vishnugad Barrage / Dam': { center: [79.624, 30.528], zoom: 12.5, pitch: 60, bearing: 315 },
+      'Rishi Ganga Hydro Project (Barrage)': { center: [79.692, 30.490], zoom: 13.0, pitch: 64, bearing: 310 },
+      'Tehri Dam': { center: [78.480, 30.378], zoom: 12.8, pitch: 62, bearing: 330 },
+      'Kosi River Landslide Dam (Sun Kosi / Bhote Kosi)': { center: [85.890, 27.810], zoom: 12.6, pitch: 65, bearing: 220 },
+      'Sardar Sarovar Dam': { center: [73.748, 21.828], zoom: 12.5, pitch: 55, bearing: 260 },
+      'Idukki Arch Dam': { center: [76.973, 9.851], zoom: 13.2, pitch: 65, bearing: 310 },
+      'Mullaperiyar Dam': { center: [77.145, 9.530], zoom: 13.0, pitch: 60, bearing: 290 },
+      'Bhakra Dam': { center: [76.326, 31.408], zoom: 12.7, pitch: 58, bearing: 180 },
+      'Hirakud Dam': { center: [83.870, 21.570], zoom: 12.2, pitch: 50, bearing: 140 },
+      'Chungthang / Teesta III Dam': { center: [88.650, 27.600], zoom: 13.0, pitch: 66, bearing: 195 }
+    };
+
+    // Run Simulation
+    async function runSimulation() {
+      const failMode = document.querySelector('input[name="failure_mode"]:checked').value;
+      const payload = {
+        dam_name: currentCustomDam ? currentCustomDam.name : document.getElementById('select-dam').value,
+        custom_dam: currentCustomDam,
+        model_view_mode: currentModelMode,
+        terrain_provider: document.getElementById('select-terrain').value,
+        scenario_preset: activeScenarioPreset,
+        breach_width_m: parseFloat(document.getElementById('input-breach-width').value),
+        water_level_m: parseFloat(document.getElementById('input-water-level').value),
+        formation_time_min: 15.0,
+        manning_n: 0.035,
+        rainfall_intensity_mmh: parseFloat(document.getElementById('input-rainfall').value),
+        soil_saturation_pct: parseFloat(document.getElementById('input-soil').value),
+        landslide_volume_mcm: parseFloat(document.getElementById('input-landslide').value) / 10,
+        failure_mode: failMode,
+        sediment_concentration_pct: parseFloat(document.getElementById('input-sediment').value),
+        cascading_failure: document.getElementById('check-cascade').checked,
+        early_warning_lead_time_min: parseFloat(document.getElementById('input-warning').value)
+      };
+
+      try {
+        const res = await fetch('http://127.0.0.1:8000/api/v1/simulations/simulate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          currentSimulation = await res.json();
+          updateDashboard(currentSimulation);
+          showBanner(currentSimulation);
+          document.getElementById('backend-status').innerText = `${currentSimulation.latency_ms} ms`;
+        }
+      } catch (err) {
+        console.error('Fetch error:', err);
+      }
+    }
+
+    document.getElementById('btn-simulate').addEventListener('click', runSimulation);
+
+    // Dashboard HUD Update
+    function updateDashboard(sim) {
+      document.getElementById('kpi-discharge').innerHTML = `${sim.compound_peak_discharge_m3s.toLocaleString()} <span class="text-xs font-normal text-slate-400">m³/s</span>`;
+      document.getElementById('kpi-density').innerHTML = `${sim.fluid_density_kg_m3.toLocaleString()} <span class="text-xs font-normal text-slate-400">kg/m³</span>`;
+      document.getElementById('kpi-force').innerHTML = `${sim.impact_summary.peak_hydrodynamic_force_kpa.toLocaleString()} <span class="text-xs font-normal text-slate-400">kPa</span>`;
+      document.getElementById('kpi-roads').innerHTML = `${sim.impact_summary.total_roads_inundated_km} <span class="text-xs font-normal text-slate-400">km</span>`;
+
+      // Evacuation bar
+      const evac = sim.impact_summary.evacuated_population;
+      const risk = sim.impact_summary.population_at_risk;
+      const total = evac + risk || 1;
+      const evacPct = Math.round((evac / total) * 100);
+      document.getElementById('bar-evac').style.width = `${evacPct}%`;
+      document.getElementById('bar-risk').style.width = `${100 - evacPct}%`;
+      document.getElementById('kpi-evac').innerText = evac.toLocaleString();
+      document.getElementById('kpi-risk').innerText = risk.toLocaleString();
+      document.getElementById('lbl-lead-time').innerText = `${document.getElementById('input-warning').value}m`;
+
+      // Isolated villages
+      const vList = document.getElementById('list-isolated-villages');
+      vList.innerHTML = sim.impact_summary.isolated_villages.map(v => `
+        <div class="p-2 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+            <span class="font-medium text-slate-200">${v}</span>
+          </div>
+          <span class="text-[10px] text-rose-400 font-bold">ALERT</span>
+        </div>
+      `).join('');
+      document.getElementById('badge-villages-count').innerText = `${sim.impact_summary.isolated_villages.length} Identified`;
+
+      // SPH vs Delft3D Discrepancy Matrix Update (Gap 2)
+      if (sim.comparison_matrix) {
+        const cm = sim.comparison_matrix;
+        const diffDepthEl = document.getElementById('diff-delta-h');
+        if (diffDepthEl) diffDepthEl.innerText = `${cm.delta_peak_depth_m > 0 ? '+' : ''}${cm.delta_peak_depth_m} m`;
+        const diffVelEl = document.getElementById('diff-delta-v');
+        if (diffVelEl) diffVelEl.innerText = `${cm.delta_velocity_mps > 0 ? '+' : ''}${cm.delta_velocity_mps} m/s`;
+        const diffIouEl = document.getElementById('diff-iou');
+        if (diffIouEl) diffIouEl.innerText = `${Math.round(cm.jaccard_iou * 100)}%`;
+        const diffConcEl = document.getElementById('diff-concordant-area');
+        if (diffConcEl) diffConcEl.innerText = `${cm.concordant_agreement_area_km2} km²`;
+        const diffSphEl = document.getElementById('diff-sph-area');
+        if (diffSphEl) diffSphEl.innerText = `${cm.sph_dominant_area_km2} km²`;
+        const diffDelftEl = document.getElementById('diff-delft-area');
+        if (diffDelftEl) diffDelftEl.innerText = `${cm.delft3d_dominant_area_km2} km²`;
+      }
+
+      // Sentinel-1 SAR Satellite Validation Update
+      if (sim.satellite_validation) {
+        const sat = sim.satellite_validation;
+        const csiEl = document.getElementById('sat-csi');
+        if (csiEl) csiEl.innerText = `${(sat.critical_success_index_csi * 100).toFixed(1)}%`;
+        const f1El = document.getElementById('sat-f1');
+        if (f1El) f1El.innerText = sat.f1_score.toFixed(3);
+        const r2El = document.getElementById('sat-r2');
+        if (r2El) r2El.innerText = sat.wse_correlation_r2.toFixed(3);
+        const tpEl = document.getElementById('sat-tp-area');
+        if (tpEl) tpEl.innerText = `${sat.true_positive_area_km2} km²`;
+        const fpEl = document.getElementById('sat-fp-area');
+        if (fpEl) fpEl.innerText = `${sat.false_positive_area_km2} km²`;
+        const fnEl = document.getElementById('sat-fn-area');
+        if (fnEl) fnEl.innerText = `${sat.false_negative_area_km2} km²`;
+
+        if (map.getSource('sar-confusion') && sat.confusion_geojson) {
+          map.getSource('sar-confusion').setData(sat.confusion_geojson);
+        }
+      }
+
+      // HADR Quantitative Loss & Damage Assessment Update
+      if (sim.damage_assessment) {
+        const dmg = sim.damage_assessment;
+        const totLossEl = document.getElementById('dmg-total-loss');
+        if (totLossEl) totLossEl.innerText = `₹ ${dmg.total_economic_loss_inr_cr.toFixed(2)} Cr`;
+        const eadEl = document.getElementById('dmg-ead');
+        if (eadEl) eadEl.innerText = `₹ ${dmg.expected_annual_damage_inr_cr.toFixed(2)} Cr`;
+        const prioBadge = document.getElementById('badge-ndma-priority');
+        if (prioBadge) prioBadge.innerText = dmg.ndma_priority_level.split(' ')[0] + ' ' + (dmg.ndma_priority_level.split(' ')[1] || 'ALERT');
+
+        if (dmg.asset_breakdown && dmg.asset_breakdown.length >= 5) {
+          const rStat = document.getElementById('dmg-roads-stat');
+          if (rStat) rStat.innerText = `${dmg.asset_breakdown[0].damaged_units} km (₹ ${dmg.asset_breakdown[0].estimated_loss_inr_cr} Cr)`;
+          const bStat = document.getElementById('dmg-bridges-stat');
+          if (bStat) bStat.innerText = `${dmg.asset_breakdown[1].damaged_units} Units (₹ ${dmg.asset_breakdown[1].estimated_loss_inr_cr} Cr)`;
+          const hStat = document.getElementById('dmg-hospitals-stat');
+          if (hStat) hStat.innerText = `${dmg.asset_breakdown[2].damaged_units} Inundated`;
+          const sStat = document.getElementById('dmg-substations-stat');
+          if (sStat) sStat.innerText = `${dmg.asset_breakdown[4].damaged_units} Submerged`;
+        }
+      }
+
+      // Multi-Directional Flow breakdown
+      if (sim.multi_direction_summary) {
+        document.getElementById('multi-downstream-pct').innerText = `${sim.multi_direction_summary.primary_downstream_pct}%`;
+        document.getElementById('multi-backwater-pct').innerText = `${sim.multi_direction_summary.confluence_backwater_pct}% (${sim.multi_direction_summary.backwater_reach_km}km)`;
+        document.getElementById('multi-lateral-pct').innerText = `${sim.multi_direction_summary.lateral_overbank_pct}%`;
+      }
+
+      renderFrame(parseInt(document.getElementById('playback-slider').value));
+    }
+
+    // Render Frame on Map (Supporting Compare, SPH, and Delft3D Views)
+    function renderFrame(timeVal) {
+      document.getElementById('playback-time').innerText = `T+${timeVal} min`;
+      if (!currentSimulation || !map.getSource('flood-wave')) return;
+
+      const frames = currentSimulation.temporal_frames || [];
+      const dualFrames = currentSimulation.dual_frames || [];
+      const frameIdx = Math.min(frames.length - 1, Math.floor((timeVal / 60) * (frames.length - 1)));
+      const frame = frames[frameIdx];
+      const dualFrame = (dualFrames.length > frameIdx) ? dualFrames[frameIdx] : null;
+
+      if (currentModelMode === 'compare' && dualFrame && dualFrame.diff_geometry && map.getSource('flood-diff')) {
+        // Discrepancy Diff View
+        if (map.getLayer('flood-diff-fill')) map.setLayoutProperty('flood-diff-fill', 'visibility', 'visible');
+        if (map.getLayer('flood-diff-line')) map.setLayoutProperty('flood-diff-line', 'visibility', 'visible');
+        if (map.getLayer('flood-fill')) map.setLayoutProperty('flood-fill', 'visibility', 'none');
+        if (map.getLayer('flood-edge')) map.setLayoutProperty('flood-edge', 'visibility', 'none');
+        map.getSource('flood-diff').setData(dualFrame.diff_geometry);
+      } else {
+        // Single Model View (SPH or Delft3D or Default SWE)
+        if (map.getLayer('flood-diff-fill')) map.setLayoutProperty('flood-diff-fill', 'visibility', 'none');
+        if (map.getLayer('flood-diff-line')) map.setLayoutProperty('flood-diff-line', 'visibility', 'none');
+        if (map.getLayer('flood-fill')) map.setLayoutProperty('flood-fill', 'visibility', 'visible');
+        if (map.getLayer('flood-edge')) map.setLayoutProperty('flood-edge', 'visibility', 'visible');
+
+        if (currentModelMode === 'sph') {
+          map.setPaintProperty('flood-fill', 'fill-color', '#ea580c');
+          map.setPaintProperty('flood-edge', 'line-color', '#fb923c');
+          const geom = (dualFrame && dualFrame.sph && dualFrame.sph.geojson_geometry) ? dualFrame.sph.geojson_geometry : frame.geojson_geometry;
+          if (geom) map.getSource('flood-wave').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: geom }] });
+        } else if (currentModelMode === 'delft3d') {
+          map.setPaintProperty('flood-fill', 'fill-color', '#4f46e5');
+          map.setPaintProperty('flood-edge', 'line-color', '#818cf8');
+          const geom = (dualFrame && dualFrame.delft3d && dualFrame.delft3d.geojson_geometry) ? dualFrame.delft3d.geojson_geometry : frame.geojson_geometry;
+          if (geom) map.getSource('flood-wave').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: geom }] });
+        } else if (frame && frame.geojson_geometry) {
+          map.setPaintProperty('flood-fill', 'fill-color', '#0284c7');
+          map.setPaintProperty('flood-edge', 'line-color', '#38bdf8');
+          map.getSource('flood-wave').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: frame.geojson_geometry }] });
+        }
+      }
+
+      // 2. Render 2D Multi-Directional Velocity Vectors
+      if (frame && frame.flow_vectors && map.getSource('flow-vectors')) {
+        const vectorFeatures = frame.flow_vectors.map(v => ({
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [v.lon, v.lat]
+          },
+          properties: {
+            bearing_deg: v.bearing_deg,
+            velocity_mps: v.velocity_mps,
+            flow_type: v.flow_type,
+            label: v.label
+          }
+        }));
+        map.getSource('flow-vectors').setData({
+          type: 'FeatureCollection',
+          features: vectorFeatures
+        });
+      }
+
+      // 3. Update Event Log on Right HUD
+      if (frame && frame.new_impact_events && frame.new_impact_events.length > 0) {
+        const logEl = document.getElementById('event-log');
+        logEl.innerHTML = frame.new_impact_events.map(ev => `<p class="text-sky-300">&bull; ${ev}</p>`).join('');
+      }
+    }
+
+    document.getElementById('playback-slider').addEventListener('input', (e) => {
+      renderFrame(parseInt(e.target.value));
+    });
+
+    // Play/Pause Controller
+    const btnPlay = document.getElementById('btn-play-toggle');
+    btnPlay.addEventListener('click', () => {
+      isPlaying = !isPlaying;
+      if (isPlaying) {
+        btnPlay.innerHTML = '<i data-lucide="pause" class="w-5 h-5 fill-white"></i>';
+        lucide.createIcons();
+        playInterval = setInterval(() => {
+          const slider = document.getElementById('playback-slider');
+          let val = (parseInt(slider.value) + 15);
+          if (val > 60) val = 0;
+          slider.value = val;
+          renderFrame(val);
+        }, 1200);
+      } else {
+        btnPlay.innerHTML = '<i data-lucide="play" class="w-5 h-5 fill-white"></i>';
+        lucide.createIcons();
+        clearInterval(playInterval);
+      }
+    });
+
+    // Dual Solver Switcher Buttons (Gap 2)
+    const btnModeSph = document.getElementById('btn-mode-sph');
+    const btnModeDelft = document.getElementById('btn-mode-delft3d');
+    const btnModeCompare = document.getElementById('btn-mode-compare');
+
+    function setSolverMode(mode) {
+      currentModelMode = mode;
+      btnModeSph.className = 'py-1 rounded-lg text-slate-400 hover:text-white transition font-medium flex items-center justify-center gap-1 cursor-pointer';
+      btnModeDelft.className = 'py-1 rounded-lg text-slate-400 hover:text-white transition font-medium flex items-center justify-center gap-1 cursor-pointer';
+      btnModeCompare.className = 'py-1 rounded-lg text-slate-400 hover:text-white transition font-medium flex items-center justify-center gap-1 cursor-pointer';
+
+      if (mode === 'sph') {
+        btnModeSph.className = 'py-1 rounded-lg bg-amber-500 text-white transition font-bold flex items-center justify-center gap-1 cursor-pointer shadow';
+      } else if (mode === 'delft3d') {
+        btnModeDelft.className = 'py-1 rounded-lg bg-indigo-600 text-white transition font-bold flex items-center justify-center gap-1 cursor-pointer shadow';
+      } else {
+        btnModeCompare.className = 'py-1 rounded-lg bg-sky-600 text-white transition font-bold flex items-center justify-center gap-1 cursor-pointer shadow';
+      }
+
+      renderFrame(parseInt(document.getElementById('playback-slider').value));
+    }
+
+    if (btnModeSph) btnModeSph.addEventListener('click', () => setSolverMode('sph'));
+    if (btnModeDelft) btnModeDelft.addEventListener('click', () => setSolverMode('delft3d'));
+    if (btnModeCompare) btnModeCompare.addEventListener('click', () => setSolverMode('compare'));
+
+    // 7 Canonical Scenario Preset Listeners (S1-S7)
+    const scenarioBtns = document.querySelectorAll('.btn-scenario-preset');
+    scenarioBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const scId = btn.getAttribute('data-scenario');
+        activeScenarioPreset = scId;
+        scenarioBtns.forEach(b => {
+          b.className = 'btn-scenario-preset py-1 px-1 rounded-lg bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white transition text-center font-bold cursor-pointer';
+        });
+        btn.className = 'btn-scenario-preset py-1 px-1 rounded-lg bg-amber-500 text-white transition text-center font-bold cursor-pointer shadow-lg shadow-amber-500/30';
+        runSimulation();
+      });
+    });
+
+    // DEM Terrain Provider Selector Listener
+    const selectTerrain = document.getElementById('select-terrain');
+    const lblTerrain = document.getElementById('lbl-terrain-source');
+    if (selectTerrain) {
+      selectTerrain.addEventListener('change', (e) => {
+        const texts = {
+          'copernicus_30m': 'Copernicus GLO-30',
+          'fabdem_30m': 'FABDEM Bare-Earth',
+          'cartodem_30m': 'CartoDEM 30m',
+          'srtm_30m': 'NASA SRTM 30m'
+        };
+        if (lblTerrain) lblTerrain.innerText = texts[e.target.value] || e.target.value;
+        runSimulation();
+      });
+    }
+
+    // Sentinel-1 SAR Overlay Toggle
+    let showSarOverlay = false;
+    const btnToggleSar = document.getElementById('btn-toggle-sar');
+    const lblSarState = document.getElementById('lbl-sar-state');
+    if (btnToggleSar) {
+      btnToggleSar.addEventListener('click', () => {
+        showSarOverlay = !showSarOverlay;
+        if (showSarOverlay) {
+          lblSarState.innerText = 'ON';
+          lblSarState.className = 'text-emerald-400 font-bold';
+          btnToggleSar.classList.add('border-emerald-500', 'bg-emerald-950/40');
+          if (map.getLayer('sar-confusion-fill')) map.setLayoutProperty('sar-confusion-fill', 'visibility', 'visible');
+          if (map.getLayer('sar-confusion-line')) map.setLayoutProperty('sar-confusion-line', 'visibility', 'visible');
+        } else {
+          lblSarState.innerText = 'OFF';
+          lblSarState.className = 'text-rose-400 font-bold';
+          btnToggleSar.classList.remove('border-emerald-500', 'bg-emerald-950/40');
+          if (map.getLayer('sar-confusion-fill')) map.setLayoutProperty('sar-confusion-fill', 'visibility', 'none');
+          if (map.getLayer('sar-confusion-line')) map.setLayoutProperty('sar-confusion-line', 'visibility', 'none');
+        }
+      });
+    }
+
+    // Export Center Modal Controls
+    const modalExport = document.getElementById('modal-export');
+    const btnOpenExport = document.getElementById('btn-open-export');
+    const btnCloseExport = document.getElementById('btn-close-export');
+    const btnCancelExport = document.getElementById('btn-cancel-export');
+
+    if (btnOpenExport) {
+      btnOpenExport.addEventListener('click', () => {
+        if (modalExport) {
+          modalExport.classList.remove('hidden');
+          lucide.createIcons();
+        }
+      });
+    }
+    if (btnCloseExport) btnCloseExport.addEventListener('click', () => modalExport.classList.add('hidden'));
+    if (btnCancelExport) btnCancelExport.addEventListener('click', () => modalExport.classList.add('hidden'));
+
+    // Benchmark Dam Selection Listener (Flies camera across national basins)
+    const selectDam = document.getElementById('select-dam');
+    selectDam.addEventListener('change', (e) => {
+      currentCustomDam = null;
+      const damName = e.target.value;
+      const loc = DAM_COORDINATES[damName];
+      if (loc) {
+        map.flyTo({ center: loc.center, zoom: loc.zoom, pitch: loc.pitch, bearing: loc.bearing, duration: 2000 });
+      }
+      runSimulation();
+    });
+
+    // Custom Dam Modal Dialog Controls (Gap 1)
+    const modalCustomDam = document.getElementById('modal-custom-dam');
+    const btnOpenModal = document.getElementById('btn-open-modal');
+    const btnCloseModal = document.getElementById('btn-close-modal');
+    const btnCancelModal = document.getElementById('btn-cancel-modal');
+    const btnSubmitCustom = document.getElementById('btn-submit-custom-dam');
+
+    function openCustomModal() {
+      if (modalCustomDam) {
+        modalCustomDam.classList.remove('hidden');
+        lucide.createIcons();
+      }
+    }
+    function closeCustomModal() {
+      if (modalCustomDam) modalCustomDam.classList.add('hidden');
+    }
+
+    if (btnOpenModal) btnOpenModal.addEventListener('click', openCustomModal);
+    if (btnCloseModal) btnCloseModal.addEventListener('click', closeCustomModal);
+    if (btnCancelModal) btnCancelModal.addEventListener('click', closeCustomModal);
+
+    if (btnSubmitCustom) {
+      btnSubmitCustom.addEventListener('click', () => {
+        const name = document.getElementById('input-custom-name').value.trim() || 'Custom Dam';
+        const river = document.getElementById('input-custom-river').value.trim() || 'Custom River';
+        const state = document.getElementById('input-custom-state').value.trim() || 'India';
+        const basin = document.getElementById('input-custom-basin').value.trim() || 'Custom Basin';
+        const lat = parseFloat(document.getElementById('input-custom-lat').value) || 10.8327;
+        const lon = parseFloat(document.getElementById('input-custom-lon').value) || 78.8197;
+        const height_m = parseFloat(document.getElementById('input-custom-height').value) || 8.5;
+        const capacity_mcm = parseFloat(document.getElementById('input-custom-capacity').value) || 150.0;
+        const slope_gradient = parseFloat(document.getElementById('input-custom-slope').value) || 0.004;
+        const crest_length_m = parseFloat(document.getElementById('input-custom-crest').value) || 300.0;
+
+        currentCustomDam = {
+          dam_name: name,
+          name: name,
+          river_name: river,
+          state,
+          basin,
+          lat,
+          lon,
+          height_m,
+          capacity_mcm,
+          downstream_gradient: slope_gradient,
+          slope_gradient,
+          crest_length_m
+        };
+
+        // Add or update custom dam option in dropdown
+        let customOpt = document.getElementById('opt-custom-dam');
+        if (!customOpt) {
+          customOpt = document.createElement('option');
+          customOpt.id = 'opt-custom-dam';
+          selectDam.prepend(customOpt);
+        }
+        customOpt.value = name;
+        customOpt.text = `⚡ ${name} (${river}, ${state})`;
+        customOpt.selected = true;
+
+        closeCustomModal();
+        map.flyTo({ center: [lon, lat], zoom: 12.5, pitch: 60, bearing: 315, duration: 2200 });
+        runSimulation();
+      });
+    }
+
+    // Camera Presets: Downhill Chase Cam vs Looking Uphill
+    document.getElementById('btn-cam-downhill').addEventListener('click', () => {
+      // Standing high behind origin at 3,700m, looking North-West directly down the canyon flow path
+      map.easeTo({ center: [79.670, 30.490], zoom: 12.3, pitch: 64, bearing: 318, duration: 1500 });
+    });
+    document.getElementById('btn-cam-uphill').addEventListener('click', () => {
+      // Standing at Tapovan (1,800m), looking South-East up towards the 7,816m Nanda Devi peaks
+      map.easeTo({ center: [79.650, 30.510], zoom: 12.6, pitch: 68, bearing: 138, duration: 1500 });
+    });
+    // 2D Vectors Layer Visibility Toggle
+    let showVectors = true;
+    document.getElementById('btn-toggle-vectors').addEventListener('click', () => {
+      showVectors = !showVectors;
+      const stateEl = document.getElementById('lbl-vectors-state');
+      if (showVectors) {
+        stateEl.innerText = 'ON';
+        stateEl.className = 'text-emerald-400';
+        if (map.getLayer('flow-vectors-layer')) {
+          map.setLayoutProperty('flow-vectors-layer', 'visibility', 'visible');
+        }
+      } else {
+        stateEl.innerText = 'OFF';
+        stateEl.className = 'text-rose-400';
+        if (map.getLayer('flow-vectors-layer')) {
+          map.setLayoutProperty('flow-vectors-layer', 'visibility', 'none');
+        }
+      }
+    });
+
+    // Panel Collapse & Expand Controls
+    const panelLeft = document.getElementById('panel-left');
+    const panelRight = document.getElementById('panel-right');
+    const btnOpenLeft = document.getElementById('btn-open-left');
+    const btnOpenRight = document.getElementById('btn-open-right');
+    const btnCollapseLeft = document.getElementById('btn-collapse-left');
+    const btnCollapseRight = document.getElementById('btn-collapse-right');
+    const btnFocusMode = document.getElementById('btn-focus-mode');
+    const lblFocusText = document.getElementById('lbl-focus-text');
+    const bannerGravity = document.getElementById('banner-gravity');
+    const btnCloseGravity = document.getElementById('btn-close-gravity');
+
+    function collapseLeft() {
+      panelLeft.style.transform = 'translateX(-120%)';
+      btnOpenLeft.classList.remove('hidden');
+    }
+    function expandLeft() {
+      panelLeft.style.transform = 'translateX(0)';
+      btnOpenLeft.classList.add('hidden');
+    }
+
+    function collapseRight() {
+      panelRight.style.transform = 'translateX(120%)';
+      btnOpenRight.classList.remove('hidden');
+    }
+    function expandRight() {
+      panelRight.style.transform = 'translateX(0)';
+      btnOpenRight.classList.add('hidden');
+    }
+
+    btnCollapseLeft.addEventListener('click', collapseLeft);
+    btnOpenLeft.addEventListener('click', expandLeft);
+    btnCollapseRight.addEventListener('click', collapseRight);
+    btnOpenRight.addEventListener('click', expandRight);
+
+    // Full Map / Focus Mode Toggle
+    let isFocusMode = false;
+    btnFocusMode.addEventListener('click', () => {
+      isFocusMode = !isFocusMode;
+      if (isFocusMode) {
+        collapseLeft();
+        collapseRight();
+        if (bannerGravity) bannerGravity.style.opacity = '0';
+        lblFocusText.innerText = 'Show Panels';
+        btnFocusMode.classList.add('bg-sky-600', 'text-white');
+        btnFocusMode.classList.remove('bg-slate-900/90', 'text-slate-300');
+      } else {
+        expandLeft();
+        expandRight();
+        if (bannerGravity) bannerGravity.style.opacity = '1';
+        lblFocusText.innerText = 'Full Map';
+        btnFocusMode.classList.remove('bg-sky-600', 'text-white');
+        btnFocusMode.classList.add('bg-slate-900/90', 'text-slate-300');
+      }
+      lucide.createIcons();
+    });
+
+    if (btnCloseGravity) {
+      btnCloseGravity.addEventListener('click', () => {
+        bannerGravity.style.display = 'none';
+      });
+    }
+    lucide.createIcons();
+  </script>
+
+  <!-- Modal: Auto-Build Any Indian River / Dam Framework (Gap 1) -->
+  <div id="modal-custom-dam" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <!-- Modal Header -->
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20">
+            <i data-lucide="sparkles" class="w-5 h-5 text-white"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              Auto-Build River / Dam Model
+              <span class="text-[10px] font-mono font-semibold bg-sky-950 text-sky-400 border border-sky-800 px-2 py-0.5 rounded-full">Gap 1 Architecture</span>
+            </h3>
+            <p class="text-xs text-slate-400">Instantly generate 2D DEM thalweg, mesh & hydrographs for any Indian river</p>
+          </div>
+        </div>
+        <button id="btn-close-modal" class="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition cursor-pointer">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+        <!-- Dam Name & River -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-[11px] font-semibold text-slate-300">Dam / Structure Name</label>
+            <input id="input-custom-name" type="text" value="Kallanai Grand Anicut" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500 font-medium">
+          </div>
+          <div class="space-y-1">
+            <label class="text-[11px] font-semibold text-slate-300">River Name</label>
+            <input id="input-custom-river" type="text" value="Kaveri River" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500 font-medium">
+          </div>
+        </div>
+
+        <!-- State & Basin -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-[11px] font-semibold text-slate-300">State / Territory</label>
+            <input id="input-custom-state" type="text" value="Tamil Nadu" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500 font-medium">
+          </div>
+          <div class="space-y-1">
+            <label class="text-[11px] font-semibold text-slate-300">River Basin</label>
+            <input id="input-custom-basin" type="text" value="Cauvery Basin" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500 font-medium">
+          </div>
+        </div>
+
+        <!-- Coordinates Lat / Lon -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-[11px] font-semibold text-slate-300 flex justify-between">
+              <span>Latitude (°N)</span>
+              <span class="text-[10px] text-sky-400 font-mono">Decimal</span>
+            </label>
+            <input id="input-custom-lat" type="number" step="0.0001" value="10.8327" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500 font-mono">
+          </div>
+          <div class="space-y-1">
+            <label class="text-[11px] font-semibold text-slate-300 flex justify-between">
+              <span>Longitude (°E)</span>
+              <span class="text-[10px] text-sky-400 font-mono">Decimal</span>
+            </label>
+            <input id="input-custom-lon" type="number" step="0.0001" value="78.8197" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500 font-mono">
+          </div>
+        </div>
+
+        <!-- Height & Storage Capacity -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-[11px] font-semibold text-slate-300">Structure Height (m)</label>
+            <input id="input-custom-height" type="number" step="0.5" value="8.5" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500 font-mono">
+          </div>
+          <div class="space-y-1">
+            <label class="text-[11px] font-semibold text-slate-300">Reservoir Storage (MCM)</label>
+            <input id="input-custom-capacity" type="number" step="1.0" value="150.0" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500 font-mono">
+          </div>
+        </div>
+
+        <!-- Slope Gradient & Crest Length -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-[11px] font-semibold text-slate-300">River Slope Gradient (m/m)</label>
+            <input id="input-custom-slope" type="number" step="0.001" value="0.004" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500 font-mono">
+          </div>
+          <div class="space-y-1">
+            <label class="text-[11px] font-semibold text-slate-300">Crest Length (m)</label>
+            <input id="input-custom-crest" type="number" step="5" value="329" class="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500 font-mono">
+          </div>
+        </div>
+
+        <!-- Automation Pipeline Banner -->
+        <div class="p-3 rounded-2xl bg-sky-950/40 border border-sky-800/60 text-[11px] text-slate-300 space-y-1">
+          <p class="font-bold text-sky-400 flex items-center gap-1.5">
+            <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
+            Automatic Pipeline Pipeline:
+          </p>
+          <p class="text-slate-400 leading-relaxed">
+            1. Constructs downhill thalweg coordinate descent.<br>
+            2. Automatically generates 32,400-cell curvilinear SWE mesh.<br>
+            3. Synthesizes Froehlich breach hydrographs & cloudburst boundary conditions.
+          </p>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 border-t border-slate-800 flex items-center justify-end gap-3 bg-slate-950/60">
+        <button id="btn-cancel-modal" type="button" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition cursor-pointer">
+          Cancel
+        </button>
+        <button id="btn-submit-custom-dam" type="button" class="px-5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-sky-500/25 transition active:scale-95 flex items-center gap-2 cursor-pointer">
+          <i data-lucide="play" class="w-3.5 h-3.5 fill-white"></i>
+          <span>Auto-Build & Run Simulation</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Enterprise GIS & HADR Report Export Center -->
+  <div id="modal-export" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <!-- Header -->
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+            <i data-lucide="download" class="w-5 h-5 text-white"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              Export Center
+              <span class="text-[10px] font-mono font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded-full">GIS & HADR Ready</span>
+            </h3>
+            <p class="text-xs text-slate-400">Download simulation layers, 3D extents, and emergency reports</p>
+          </div>
+        </div>
+        <button id="btn-close-export" class="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition cursor-pointer">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Export Cards Grid -->
+      <div class="p-6 grid grid-cols-2 gap-3.5">
+        <!-- 1. Google Earth 3D KML -->
+        <a href="http://127.0.0.1:8000/api/v1/export/kml" target="_blank" class="p-4 rounded-2xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-sky-500 transition group flex flex-col justify-between space-y-3 cursor-pointer">
+          <div class="flex items-center justify-between">
+            <div class="w-9 h-9 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center group-hover:scale-105 transition">
+              <i data-lucide="globe" class="w-5 h-5"></i>
+            </div>
+            <span class="text-[10px] font-mono font-bold text-sky-400 bg-sky-950/80 border border-sky-800 px-2 py-0.5 rounded-md">.KML</span>
+          </div>
+          <div>
+            <h4 class="text-xs font-bold text-white group-hover:text-sky-300 transition">Google Earth 3D</h4>
+            <p class="text-[11px] text-slate-400 mt-0.5">Extruded 3D water polygon ready for Google Earth desktop/mobile.</p>
+          </div>
+          <span class="text-[10px] text-sky-400 font-bold flex items-center gap-1">Download KML <i data-lucide="arrow-right" class="w-3 h-3"></i></span>
+        </a>
+
+        <!-- 2. ESRI Shapefile Bundle -->
+        <a href="http://127.0.0.1:8000/api/v1/export/shapefile" target="_blank" class="p-4 rounded-2xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500 transition group flex flex-col justify-between space-y-3 cursor-pointer">
+          <div class="flex items-center justify-between">
+            <div class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center group-hover:scale-105 transition">
+              <i data-lucide="layers" class="w-5 h-5"></i>
+            </div>
+            <span class="text-[10px] font-mono font-bold text-amber-400 bg-amber-950/80 border border-amber-800 px-2 py-0.5 rounded-md">.ZIP</span>
+          </div>
+          <div>
+            <h4 class="text-xs font-bold text-white group-hover:text-amber-300 transition">ESRI Shapefile</h4>
+            <p class="text-[11px] text-slate-400 mt-0.5">Industry-standard package with .shp, .shx, .dbf, and WGS84 .prj.</p>
+          </div>
+          <span class="text-[10px] text-amber-400 font-bold flex items-center gap-1">Download ZIP <i data-lucide="arrow-right" class="w-3 h-3"></i></span>
+        </a>
+
+        <!-- 3. Raw GeoJSON Features -->
+        <a href="http://127.0.0.1:8000/api/v1/export/geojson" target="_blank" class="p-4 rounded-2xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-emerald-500 transition group flex flex-col justify-between space-y-3 cursor-pointer">
+          <div class="flex items-center justify-between">
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-105 transition">
+              <i data-lucide="file-code" class="w-5 h-5"></i>
+            </div>
+            <span class="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-2 py-0.5 rounded-md">.GEOJSON</span>
+          </div>
+          <div>
+            <h4 class="text-xs font-bold text-white group-hover:text-emerald-300 transition">GeoJSON Features</h4>
+            <p class="text-[11px] text-slate-400 mt-0.5">Web-ready coordinates, velocity vectors, and peak stage attributes.</p>
+          </div>
+          <span class="text-[10px] text-emerald-400 font-bold flex items-center gap-1">Download GeoJSON <i data-lucide="arrow-right" class="w-3 h-3"></i></span>
+        </a>
+
+        <!-- 4. Executive HADR PDF Report -->
+        <a href="http://127.0.0.1:8000/api/v1/export/pdf-report" target="_blank" class="p-4 rounded-2xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-rose-500 transition group flex flex-col justify-between space-y-3 cursor-pointer">
+          <div class="flex items-center justify-between">
+            <div class="w-9 h-9 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center group-hover:scale-105 transition">
+              <i data-lucide="file-text" class="w-5 h-5"></i>
+            </div>
+            <span class="text-[10px] font-mono font-bold text-rose-400 bg-rose-950/80 border border-rose-800 px-2 py-0.5 rounded-md">.PDF</span>
+          </div>
+          <div>
+            <h4 class="text-xs font-bold text-white group-hover:text-rose-300 transition">Executive Briefing</h4>
+            <p class="text-[11px] text-slate-400 mt-0.5">Printable NDMA-format scenario report with damage and radar scores.</p>
+          </div>
+          <span class="text-[10px] text-rose-400 font-bold flex items-center gap-1">Download PDF <i data-lucide="arrow-right" class="w-3 h-3"></i></span>
+        </a>
+      </div>
+
+      <!-- Footer -->
+      <div class="p-4 border-t border-slate-800 flex items-center justify-between bg-slate-950/60 text-xs text-slate-400 font-mono">
+        <span>Standardized OGC CRS: EPSG:4326 (WGS84)</span>
+        <button id="btn-cancel-export" type="button" class="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition cursor-pointer">Close</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

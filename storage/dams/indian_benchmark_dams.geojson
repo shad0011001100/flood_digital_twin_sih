@@ -1,0 +1,225 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [79.624, 30.528]
+      },
+      "properties": {
+        "name": "Tapovan Vishnugad Barrage / Dam",
+        "river": "Dhauliganga",
+        "basin": "Ganga Basin",
+        "state": "Uttarakhand",
+        "lat": 30.528,
+        "lon": 79.624,
+        "height_m": 22.0,
+        "capacity_mcm": 1.2,
+        "crest_length_m": 120.0,
+        "type": "Barrage / Hydroelectric",
+        "downstream_gradient": 0.042,
+        "manning_n_default": 0.038,
+        "event_reference": "Chamoli Disaster 2021"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [79.692, 30.490]
+      },
+      "properties": {
+        "name": "Rishi Ganga Hydro Project (Barrage)",
+        "river": "Rishi Ganga",
+        "basin": "Ganga Basin",
+        "state": "Uttarakhand",
+        "lat": 30.490,
+        "lon": 79.692,
+        "height_m": 15.0,
+        "capacity_mcm": 0.5,
+        "crest_length_m": 85.0,
+        "type": "Run-of-the-river",
+        "downstream_gradient": 0.085,
+        "manning_n_default": 0.045,
+        "event_reference": "Chamoli Disaster 2021 Failure Origin"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [78.480, 30.378]
+      },
+      "properties": {
+        "name": "Tehri Dam",
+        "river": "Bhagirathi",
+        "basin": "Ganga Basin",
+        "state": "Uttarakhand",
+        "lat": 30.378,
+        "lon": 78.480,
+        "height_m": 260.5,
+        "capacity_mcm": 3540.0,
+        "crest_length_m": 575.0,
+        "type": "Rock & Earth-fill Embankment",
+        "downstream_gradient": 0.025,
+        "manning_n_default": 0.035,
+        "event_reference": "CWC Highest Dam Benchmark"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [73.748, 21.828]
+      },
+      "properties": {
+        "name": "Sardar Sarovar Dam",
+        "river": "Narmada",
+        "basin": "Narmada Basin",
+        "state": "Gujarat",
+        "lat": 21.828,
+        "lon": 73.748,
+        "height_m": 163.0,
+        "capacity_mcm": 9500.0,
+        "crest_length_m": 1210.0,
+        "type": "Concrete Gravity Dam",
+        "downstream_gradient": 0.008,
+        "manning_n_default": 0.028,
+        "event_reference": "CWC Major Basin Multi-Purpose Dam"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [76.973, 9.851]
+      },
+      "properties": {
+        "name": "Idukki Arch Dam",
+        "river": "Periyar",
+        "basin": "West Flowing Rivers",
+        "state": "Kerala",
+        "lat": 9.851,
+        "lon": 76.973,
+        "height_m": 168.9,
+        "capacity_mcm": 1996.0,
+        "crest_length_m": 365.8,
+        "type": "Double Curvature Parabolic Arch",
+        "downstream_gradient": 0.032,
+        "manning_n_default": 0.036,
+        "event_reference": "CWC Steep Gorge Arch Dam Benchmark"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [83.870, 21.570]
+      },
+      "properties": {
+        "name": "Hirakud Dam",
+        "river": "Mahanadi",
+        "basin": "Mahanadi Basin",
+        "state": "Odisha",
+        "lat": 21.570,
+        "lon": 83.870,
+        "height_m": 60.96,
+        "capacity_mcm": 5896.0,
+        "crest_length_m": 4800.0,
+        "type": "Composite Earthen & Masonry Embankment",
+        "downstream_gradient": 0.004,
+        "manning_n_default": 0.025,
+        "event_reference": "Longest Earthen Dam in Asia"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [76.326, 31.408]
+      },
+      "properties": {
+        "name": "Bhakra Dam",
+        "river": "Sutlej",
+        "basin": "Indus Basin",
+        "state": "Himachal Pradesh",
+        "lat": 31.408,
+        "lon": 76.326,
+        "height_m": 226.0,
+        "capacity_mcm": 9621.0,
+        "crest_length_m": 518.0,
+        "type": "Concrete Gravity Dam",
+        "downstream_gradient": 0.018,
+        "manning_n_default": 0.032,
+        "event_reference": "CWC High Gravity Dam Benchmark"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.145, 9.530]
+      },
+      "properties": {
+        "name": "Mullaperiyar Dam",
+        "river": "Periyar",
+        "basin": "West Flowing Rivers",
+        "state": "Kerala / Tamil Nadu",
+        "lat": 9.530,
+        "lon": 77.145,
+        "height_m": 53.66,
+        "capacity_mcm": 443.2,
+        "crest_length_m": 365.7,
+        "type": "Surkhi-Lime Masonry Gravity",
+        "downstream_gradient": 0.028,
+        "manning_n_default": 0.034,
+        "event_reference": "Inter-State Ageing Masonry Dam Benchmark"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [88.650, 27.600]
+      },
+      "properties": {
+        "name": "Chungthang / Teesta III Dam",
+        "river": "Teesta",
+        "basin": "Brahmaputra Basin",
+        "state": "Sikkim",
+        "lat": 27.600,
+        "lon": 88.650,
+        "height_m": 60.0,
+        "capacity_mcm": 5.0,
+        "crest_length_m": 125.0,
+        "type": "Concrete Face Rockfill Dam (CFRD)",
+        "downstream_gradient": 0.055,
+        "manning_n_default": 0.042,
+        "event_reference": "Sikkim 2023 South Lhonak GLOF Dam Breach"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [86.950, 26.650]
+      },
+      "properties": {
+        "name": "Kosi River Landslide Dam (Sun Kosi / Bhote Kosi)",
+        "river": "Kosi",
+        "basin": "Ganga Basin",
+        "state": "Bihar / Transboundary",
+        "lat": 26.650,
+        "lon": 86.950,
+        "height_m": 45.0,
+        "capacity_mcm": 55.0,
+        "crest_length_m": 350.0,
+        "type": "Natural Landslide Dam",
+        "downstream_gradient": 0.030,
+        "manning_n_default": 0.040,
+        "event_reference": "Kosi 2008 & 2014 River Blockage Event"
+      }
+    }
+  ]
+}
