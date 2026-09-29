@@ -38,3 +38,5 @@ ehthumbs.db
 # Storage caches
 storage/cache/
 storage/temp/
+
+.vercel

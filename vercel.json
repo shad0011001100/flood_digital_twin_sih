@@ -1,4 +1,5 @@
 {
+  "installCommand": "npm install --legacy-peer-deps",
   "buildCommand": "npm --prefix indian-dam-break-atlas run build",
   "outputDirectory": "indian-dam-break-atlas/dist/public",
   "framework": "vite",

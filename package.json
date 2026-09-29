@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "National Intelligent Flood Digital Twin & Dam-Break Decision Support System for Smart India Hackathon (SIH)",
   "private": true,
+  "workspaces": [
+    "indian-dam-break-atlas"
+  ],
   "scripts": {
     "build": "npm --prefix indian-dam-break-atlas run build",
     "dev": "npm --prefix indian-dam-break-atlas run dev",
