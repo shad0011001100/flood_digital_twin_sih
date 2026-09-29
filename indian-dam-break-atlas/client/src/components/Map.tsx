@@ -97,56 +97,97 @@ export function MapView({
   }, []);
 
   const getStyleForBasemap = (mode: "dark" | "voyager" | "satellite") => {
-    if (mode === "satellite") {
-      return {
-        version: 8,
-        sources: {
-          satellite: {
+    const baseSource =
+      mode === "satellite"
+        ? {
             type: "raster",
             tiles: [
               "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
             ],
             tileSize: 256,
             attribution: "Esri, Maxar, Earthstar Geographics",
-          },
-        },
-        layers: [
-          {
-            id: "satellite-layer",
+          }
+        : {
             type: "raster",
-            source: "satellite",
-            minzoom: 0,
-            maxzoom: 19,
-          },
-        ],
-      };
-    }
+            tiles:
+              mode === "voyager"
+                ? [
+                    "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+                    "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+                    "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+                    "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+                  ]
+                : [
+                    "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+                    "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+                    "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+                    "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+                  ],
+            tileSize: 256,
+            attribution: "© CARTO, © OpenStreetMap contributors",
+          };
 
-    const tileUrl =
-      mode === "voyager"
-        ? `https://cartodb-basemaps-a.global.ssl.fastly.net/rastertiles/voyager/{z}/{x}/{y}@2x.png?api_key=${CARTO_API_KEY}`
-        : `https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/{z}/{x}/{y}@2x.png?api_key=${CARTO_API_KEY}`;
+    const baseLayerId = mode === "satellite" ? "satellite-layer" : "carto-layer";
+    const baseSourceName = mode === "satellite" ? "satellite" : "carto";
 
     return {
       version: 8,
       sources: {
-        carto: {
-          type: "raster",
-          tiles: [tileUrl],
+        [baseSourceName]: baseSource,
+        "terrain-dem": {
+          type: "raster-dem",
+          tiles: [
+            "https://demotiles.maplibre.org/terrain-tiles/{z}/{x}/{y}.png",
+          ],
           tileSize: 256,
-          attribution: "© CARTO, © OpenStreetMap contributors",
+          encoding: "mapbox",
+          maxzoom: 12,
         },
+      },
+      terrain: {
+        source: "terrain-dem",
+        exaggeration: 1.8,
       },
       layers: [
         {
-          id: "carto-layer",
+          id: baseLayerId,
           type: "raster",
-          source: "carto",
+          source: baseSourceName,
           minzoom: 0,
           maxzoom: 19,
         },
+        {
+          id: "terrain-hillshade",
+          type: "hillshade",
+          source: "terrain-dem",
+          paint: {
+            "hillshade-shadow-color": "#080a06",
+            "hillshade-highlight-color": mode === "voyager" ? "#ffffff" : "#ebfc72",
+            "hillshade-accent-color": "#38bdf8",
+            "hillshade-exaggeration": 0.85,
+          },
+        },
       ],
     };
+  };
+
+  const setupTerrain = (map: any) => {
+    try {
+      if (!map.getSource("terrain-dem")) {
+        map.addSource("terrain-dem", {
+          type: "raster-dem",
+          tiles: [
+            "https://demotiles.maplibre.org/terrain-tiles/{z}/{x}/{y}.png",
+          ],
+          tileSize: 256,
+          encoding: "mapbox",
+          maxzoom: 12,
+        });
+      }
+      map.setTerrain({ source: "terrain-dem", exaggeration: 1.8 });
+    } catch (err) {
+      console.warn("3D Terrain initialization warning:", err);
+    }
   };
 
   const initMap = () => {
@@ -165,22 +206,7 @@ export function MapView({
     });
 
     map.on("load", () => {
-      // 3D Terrain Elevation Source (AWS Terrarium)
-      try {
-        map.addSource("terrain-dem", {
-          type: "raster-dem",
-          tiles: [
-            "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
-          ],
-          encoding: "terrarium",
-          tileSize: 256,
-          maxzoom: 15,
-        });
-        map.setTerrain({ source: "terrain-dem", exaggeration: 1.6 });
-      } catch (err) {
-        console.warn("3D Terrain initialization warning:", err);
-      }
-
+      setupTerrain(map);
       setupDynamicLayers(map);
       updateMarkersAndBeacons(map, activeDam, simTimeMinutes);
 
@@ -269,6 +295,20 @@ export function MapView({
         "fill-color": "#6366f1",
         "fill-opacity": 0.85,
         "fill-outline-color": "#ebfc72",
+      },
+    });
+
+    // 3D Flood Core Physical Volume (Catastrophic depth extrusion in gorge)
+    map.addLayer({
+      id: "water-core-3d-extrusion",
+      type: "fill-extrusion",
+      source: "water-flow-source",
+      filter: ["==", "type", "water_core"],
+      paint: {
+        "fill-extrusion-color": "#38bdf8",
+        "fill-extrusion-height": 28,
+        "fill-extrusion-base": 0,
+        "fill-extrusion-opacity": 0.75,
       },
     });
 
@@ -541,6 +581,7 @@ export function MapView({
     if (!mapRef.current || !mapLoaded) return;
     mapRef.current.setStyle(getStyleForBasemap(basemap));
     mapRef.current.once("style.load", () => {
+      setupTerrain(mapRef.current);
       setupDynamicLayers(mapRef.current);
       updateMarkersAndBeacons(mapRef.current, activeDam, simTimeMinutes);
     });

@@ -68,7 +68,7 @@ export const COMPREHENSIVE_NATIONAL_DAMS: ComprehensiveNationalDam[] = [
     settlements: [
       { name: "Tapovan Intake Tunnel & Powerhouse", coords: [79.615, 30.532], elev: "1,800m", distanceKm: 4.2, arrivalMin: 15, peakDepthM: 18.5, type: "powerhouse" },
       { name: "Dhak Village / Low-Lying Terraces", coords: [79.595, 30.540], elev: "1,720m", distanceKm: 9.8, arrivalMin: 28, peakDepthM: 15.2, type: "village" },
-      { name: "Joshimath / Dhauliganga Valley Confluence", coords: [79.565, 30.552], elev: "1,380m", distanceKm: 16.4, arrivalMin: 45, depthM: 12.8, peakDepthM: 12.8, type: "town" },
+      { name: "Joshimath / Dhauliganga Valley Confluence", coords: [79.565, 30.552], elev: "1,380m", distanceKm: 16.4, arrivalMin: 45, peakDepthM: 12.8, type: "town" },
       { name: "Vishnuprayag Hydro Intake & Alaknanda Junction", coords: [79.540, 30.556], elev: "1,310m", distanceKm: 22.5, arrivalMin: 65, peakDepthM: 10.4, type: "powerhouse" },
       { name: "Helang Bridge / NH-58 Checkpost", coords: [79.510, 30.565], elev: "1,220m", distanceKm: 34.2, arrivalMin: 98, peakDepthM: 7.6, type: "bridge" },
     ],
