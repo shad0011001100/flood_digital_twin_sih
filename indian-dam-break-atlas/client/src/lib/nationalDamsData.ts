@@ -399,93 +399,279 @@ export function generateDynamicDamPolygons(
   let activeIndex = 0;
   let currentDepthM = thalweg[0].depthM;
   let currentSpeedMs = 14.8;
+  let distanceCoveredKm = 0;
 
   if (clampedTime <= 0) {
     currentPos = thalweg[0].coords;
     activeIndex = 0;
+    distanceCoveredKm = 0;
   } else if (clampedTime >= maxTime) {
     currentPos = thalweg[thalweg.length - 1].coords;
     activeIndex = thalweg.length - 1;
     currentDepthM = thalweg[thalweg.length - 1].depthM;
     currentSpeedMs = 6.2;
+    distanceCoveredKm = thalweg[thalweg.length - 1].distanceKm;
   } else {
     for (let i = 0; i < thalweg.length - 1; i++) {
       const p1 = thalweg[i];
       const p2 = thalweg[i + 1];
       if (clampedTime >= p1.arrivalMin && clampedTime <= p2.arrivalMin) {
-        const ratio = (clampedTime - p1.arrivalMin) / (p2.arrivalMin - p1.arrivalMin);
+        const ratio = (clampedTime - p1.arrivalMin) / Math.max(0.001, p2.arrivalMin - p1.arrivalMin);
         const lng = p1.coords[0] + ratio * (p2.coords[0] - p1.coords[0]);
         const lat = p1.coords[1] + ratio * (p2.coords[1] - p1.coords[1]);
         currentPos = [lng, lat];
         activeIndex = i;
         currentDepthM = p1.depthM + ratio * (p2.depthM - p1.depthM);
         currentSpeedMs = Number((16.0 - (i / thalweg.length) * 9.0).toFixed(1));
+        distanceCoveredKm = p1.distanceKm + ratio * (p2.distanceKm - p1.distanceKm);
         break;
       }
     }
   }
 
-  // Generate expanding water body polygon from Dam Origin to currentPos
-  const activeSubPoints: [number, number][] = [];
-  for (let i = 0; i <= activeIndex; i++) {
-    activeSubPoints.push(thalweg[i].coords);
-  }
-  // If not at exact point, append interpolated currentPos
-  if (clampedTime > 0 && clampedTime < maxTime) {
-    activeSubPoints.push(currentPos);
-  }
+  // Multi-tier depths for hydraulic classification
+  const intermediateDepthM = Number(Math.max(2.1, Math.min(4.9, currentDepthM * 0.55)).toFixed(1));
+  const overbankDepthM = Number(Math.min(1.9, Math.max(0.4, currentDepthM * 0.18)).toFixed(1));
 
-  // Generate river corridor corridor offsets (left and right banks)
-  const leftBank: [number, number][] = [];
-  const rightBank: [number, number][] = [];
-  const splashLeft: [number, number][] = [];
-  const splashRight: [number, number][] = [];
-  const overbankLeft: [number, number][] = [];
-  const overbankRight: [number, number][] = [];
+  let coreCoords: [number, number][] = [];
+  let splashCoords: [number, number][] = [];
+  let overbankCoords: [number, number][] = [];
+  const flowVectors: Array<{
+    coords: [number, number];
+    bearingDeg: number;
+    speedMs: number;
+    depthM: number;
+    distanceKm: number;
+  }> = [];
+
+  // Active channel polyline for line and vector rendering
+  let activePolyline: [number, number][] = [];
 
   const splitFactor = bifurcationSplit / 100;
 
-  activeSubPoints.forEach((pt, idx) => {
-    // Determine vector heading to next point or from prev
-    let dLng = 0;
-    let dLat = 0;
-    if (idx < activeSubPoints.length - 1) {
-      dLng = activeSubPoints[idx + 1][0] - pt[0];
-      dLat = activeSubPoints[idx + 1][1] - pt[1];
-    } else if (idx > 0) {
-      dLng = pt[0] - activeSubPoints[idx - 1][0];
-      dLat = pt[1] - activeSubPoints[idx - 1][1];
-    } else {
-      dLng = 0.01;
-      dLat = -0.01;
+  // Case 1: T = 0 (Breach initiation at Dam Origin)
+  // Generate robust valid closed convex polygons (12 vertices each) so MapLibre never discards them
+  if (clampedTime <= 0 || distanceCoveredKm < 0.1) {
+    const origin = thalweg[0].coords;
+    const nextPt = thalweg[1] ? thalweg[1].coords : [origin[0] + 0.01, origin[1] - 0.01];
+    const initialHeading = Math.atan2(nextPt[1] - origin[1], nextPt[0] - origin[0]);
+
+    const numPts = 12;
+    const rCore = 0.0035 * splitFactor;
+    const rSplash = rCore * 1.7;
+    const rOverbank = rCore * 2.6;
+
+    const coreRing: [number, number][] = [];
+    const splashRing: [number, number][] = [];
+    const overbankRing: [number, number][] = [];
+
+    for (let i = 0; i < numPts; i++) {
+      const angle = (i / numPts) * Math.PI * 2;
+      // Elongate slightly downstream
+      const stretch = 1.0 + 0.4 * Math.cos(angle - initialHeading);
+      const dlng = Math.cos(angle) * stretch;
+      const dlat = Math.sin(angle) * stretch;
+
+      coreRing.push([origin[0] + dlng * rCore, origin[1] + dlat * rCore]);
+      splashRing.push([origin[0] + dlng * rSplash, origin[1] + dlat * rSplash]);
+      overbankRing.push([origin[0] + dlng * rOverbank, origin[1] + dlat * rOverbank]);
+    }
+    // Close rings
+    coreRing.push(coreRing[0]);
+    splashRing.push(splashRing[0]);
+    overbankRing.push(overbankRing[0]);
+
+    coreCoords = coreRing;
+    splashCoords = splashRing;
+    overbankCoords = overbankRing;
+
+    activePolyline = [origin, [origin[0] + Math.cos(initialHeading) * 0.002, origin[1] + Math.sin(initialHeading) * 0.002]];
+
+    const bearingDeg = Math.round(((Math.atan2(nextPt[0] - origin[0], nextPt[1] - origin[1]) * 180) / Math.PI + 360) % 360);
+    flowVectors.push({
+      coords: origin,
+      bearingDeg,
+      speedMs: currentSpeedMs,
+      depthM: currentDepthM,
+      distanceKm: 0,
+    });
+  } else {
+    // Case 2: T > 0, Wave is advancing downstream
+    // Build dense polyline along thalweg from Dam Origin to currentPos
+    const samplePts: Array<{
+      coords: [number, number];
+      depthM: number;
+      widthM: number;
+      distanceKm: number;
+      speedMs: number;
+    }> = [];
+
+    // Collect base checkpoints
+    const baseCheckpoints: Array<{
+      coords: [number, number];
+      depthM: number;
+      widthM: number;
+      distanceKm: number;
+      speedMs: number;
+    }> = [];
+
+    for (let i = 0; i <= activeIndex; i++) {
+      baseCheckpoints.push({
+        coords: thalweg[i].coords,
+        depthM: thalweg[i].depthM,
+        widthM: thalweg[i].channelWidthM,
+        distanceKm: thalweg[i].distanceKm,
+        speedMs: Number((16.0 - (i / thalweg.length) * 9.0).toFixed(1)),
+      });
     }
 
-    const len = Math.sqrt(dLng * dLng + dLat * dLat) || 1;
-    const nx = -dLat / len; // Normal vector perpendicular to flow
-    const ny = dLng / len;
+    // Append wave front if between checkpoints
+    if (clampedTime < maxTime) {
+      baseCheckpoints.push({
+        coords: currentPos,
+        depthM: currentDepthM,
+        widthM: thalweg[activeIndex].channelWidthM,
+        distanceKm: distanceCoveredKm,
+        speedMs: currentSpeedMs,
+      });
+    }
 
-    // Width scales with downstream channel morphology
-    const baseOffset = 0.004 + (idx / Math.max(1, activeSubPoints.length)) * 0.008;
-    const wCore = baseOffset * splitFactor;
-    const wSplash = baseOffset * 1.5;
-    const wOverbank = baseOffset * 2.2;
+    // Interpolate smoothly between checkpoints (every ~400m)
+    for (let i = 0; i < baseCheckpoints.length - 1; i++) {
+      const pA = baseCheckpoints[i];
+      const pB = baseCheckpoints[i + 1];
+      const segDist = Math.max(0.1, pB.distanceKm - pA.distanceKm);
+      const subSteps = Math.max(2, Math.min(8, Math.ceil(segDist / 0.8)));
 
-    leftBank.push([pt[0] + nx * wCore, pt[1] + ny * wCore]);
-    rightBank.push([pt[0] - nx * wCore, pt[1] - ny * wCore]);
+      for (let s = 0; s < subSteps; s++) {
+        const t = s / subSteps;
+        samplePts.push({
+          coords: [
+            pA.coords[0] + t * (pB.coords[0] - pA.coords[0]),
+            pA.coords[1] + t * (pB.coords[1] - pA.coords[1]),
+          ],
+          depthM: pA.depthM + t * (pB.depthM - pA.depthM),
+          widthM: pA.widthM + t * (pB.widthM - pA.widthM),
+          distanceKm: pA.distanceKm + t * (pB.distanceKm - pA.distanceKm),
+          speedMs: Number((pA.speedMs + t * (pB.speedMs - pA.speedMs)).toFixed(1)),
+        });
+      }
+    }
+    // Add exact final front point
+    samplePts.push(baseCheckpoints[baseCheckpoints.length - 1]);
 
-    splashLeft.push([pt[0] + nx * wSplash, pt[1] + ny * wSplash]);
-    splashRight.push([pt[0] - nx * wSplash, pt[1] - ny * wSplash]);
+    activePolyline = samplePts.map((p) => p.coords);
 
-    overbankLeft.push([pt[0] + nx * wOverbank, pt[1] + ny * wOverbank]);
-    overbankRight.push([pt[0] - nx * wOverbank, pt[1] - ny * wOverbank]);
-  });
+    // Compute left and right bank lateral offsets
+    const leftCore: [number, number][] = [];
+    const rightCore: [number, number][] = [];
+    const leftSplash: [number, number][] = [];
+    const rightSplash: [number, number][] = [];
+    const leftOverbank: [number, number][] = [];
+    const rightOverbank: [number, number][] = [];
 
-  // Assemble closed polygons (core water flow, SPH splash, and Delft3D overbank)
-  const coreCoords = [...leftBank, ...rightBank.reverse(), leftBank[0]];
-  const splashCoords = [...splashLeft, ...splashRight.reverse(), splashLeft[0]];
-  const overbankCoords = [...overbankLeft, ...overbankRight.reverse(), overbankLeft[0]];
+    const K = samplePts.length;
 
-  // Thalweg Centerline LineString GeoJSON
+    samplePts.forEach((pt, idx) => {
+      let dx = 0;
+      let dy = 0;
+
+      if (idx < K - 1) {
+        dx = samplePts[idx + 1].coords[0] - pt.coords[0];
+        dy = samplePts[idx + 1].coords[1] - pt.coords[1];
+      } else if (idx > 0) {
+        dx = pt.coords[0] - samplePts[idx - 1].coords[0];
+        dy = pt.coords[1] - samplePts[idx - 1].coords[1];
+      } else {
+        dx = 0.01;
+        dy = -0.01;
+      }
+
+      const len = Math.hypot(dx, dy) || 1e-6;
+      const tx = dx / len;
+      const ty = dy / len;
+      const nx = -ty; // Perpendicular normal
+      const ny = tx;
+
+      // Base channel offset in degrees
+      const baseW = Math.max(0.0022, (pt.widthM / 111320) * splitFactor);
+      const wCore = baseW * (0.9 + 0.3 * (idx / K));
+      const wSplash = wCore * 1.65;
+      const wOverbank = wCore * 2.5;
+
+      leftCore.push([pt.coords[0] + nx * wCore, pt.coords[1] + ny * wCore]);
+      rightCore.push([pt.coords[0] - nx * wCore, pt.coords[1] - ny * wCore]);
+
+      leftSplash.push([pt.coords[0] + nx * wSplash, pt.coords[1] + ny * wSplash]);
+      rightSplash.push([pt.coords[0] - nx * wSplash, pt.coords[1] - ny * wSplash]);
+
+      leftOverbank.push([pt.coords[0] + nx * wOverbank, pt.coords[1] + ny * wOverbank]);
+      rightOverbank.push([pt.coords[0] - nx * wOverbank, pt.coords[1] - ny * wOverbank]);
+
+      // Sample flow vector beacons every 4-6 points or at key settlement junctions
+      if (idx > 0 && (idx % Math.max(3, Math.floor(K / 5)) === 0 || idx === K - 1)) {
+        const bearingDeg = Math.round(((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360);
+        flowVectors.push({
+          coords: pt.coords,
+          bearingDeg,
+          speedMs: pt.speedMs,
+          depthM: Number(pt.depthM.toFixed(1)),
+          distanceKm: Number(pt.distanceKm.toFixed(1)),
+        });
+      }
+    });
+
+    // Rounded hydrodynamic surge crest nose at wave front (idx = K - 1)
+    const lastPt = samplePts[K - 1].coords;
+    const prevPt = samplePts[Math.max(0, K - 2)].coords;
+    const frontDx = lastPt[0] - prevPt[0];
+    const frontDy = lastPt[1] - prevPt[1];
+    const frontLen = Math.hypot(frontDx, frontDy) || 1e-6;
+    const ftx = frontDx / frontLen;
+    const fty = frontDy / frontLen;
+    const fnx = -fty;
+    const fny = ftx;
+
+    const baseW = Math.max(0.0022, (samplePts[K - 1].widthM / 111320) * splitFactor) * 1.2;
+    const wCore = baseW;
+    const wSplash = baseW * 1.65;
+    const wOverbank = baseW * 2.5;
+
+    // Curved parabolic surge nose points from left bank to right bank
+    const noseCore: [number, number][] = [];
+    const noseSplash: [number, number][] = [];
+    const noseOverbank: [number, number][] = [];
+
+    const noseSteps = 5;
+    for (let s = 1; s <= noseSteps; s++) {
+      const alpha = (Math.PI / 2) - (s / (noseSteps + 1)) * Math.PI; // from +pi/2 to -pi/2
+      const cosA = Math.cos(alpha);
+      const sinA = Math.sin(alpha);
+
+      // Core nose
+      noseCore.push([
+        lastPt[0] + (ftx * cosA * 1.2 + fnx * sinA) * wCore,
+        lastPt[1] + (fty * cosA * 1.2 + fny * sinA) * wCore,
+      ]);
+      // Splash nose
+      noseSplash.push([
+        lastPt[0] + (ftx * cosA * 1.2 + fnx * sinA) * wSplash,
+        lastPt[1] + (fty * cosA * 1.2 + fny * sinA) * wSplash,
+      ]);
+      // Overbank nose
+      noseOverbank.push([
+        lastPt[0] + (ftx * cosA * 1.2 + fnx * sinA) * wOverbank,
+        lastPt[1] + (fty * cosA * 1.2 + fny * sinA) * wOverbank,
+      ]);
+    }
+
+    // Assemble closed rings: Left Bank -> Wavefront Surge Nose -> Right Bank (reversed) -> Dam Breach Back -> Close
+    coreCoords = [...leftCore, ...noseCore, ...rightCore.reverse(), leftCore[0]];
+    splashCoords = [...leftSplash, ...noseSplash, ...rightSplash.reverse(), leftSplash[0]];
+    overbankCoords = [...leftOverbank, ...noseOverbank, ...rightOverbank.reverse(), leftOverbank[0]];
+  }
+
+  // Thalweg Centerline Full Channel GeoJSON
   const thalwegFullLine = {
     type: "FeatureCollection",
     features: [
@@ -500,21 +686,48 @@ export function generateDynamicDamPolygons(
     ],
   };
 
-  // Active Flowing Water GeoJSON
+  // Active Flooded Reach Polyline GeoJSON (for animated downstream dashing flow line)
+  const activeFlowLine = {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: { name: "Active Flooded Downstream Flow Channel", speed: currentSpeedMs },
+        geometry: {
+          type: "LineString",
+          coordinates: activePolyline.length >= 2 ? activePolyline : [dam.coords, [dam.coords[0] + 0.001, dam.coords[1] - 0.001]],
+        },
+      },
+    ],
+  };
+
+  // Multi-tier Active Flowing Water GeoJSON (Deep Core, SPH Splash, Overbank)
   const waterFlowGeoJSON = {
     type: "FeatureCollection",
     features: [
       {
         type: "Feature",
-        properties: { type: "water_core", depth: currentDepthM, speed: currentSpeedMs },
+        properties: {
+          type: "delft_overbank",
+          depth: overbankDepthM,
+          tier: "overbank_spread",
+          label: "Overbank Spread (<2m)",
+          speed: currentSpeedMs,
+        },
         geometry: {
           type: "Polygon",
-          coordinates: [coreCoords],
+          coordinates: [overbankCoords],
         },
       },
       {
         type: "Feature",
-        properties: { type: "sph_splash", depth: Number((currentDepthM * 1.25).toFixed(1)) },
+        properties: {
+          type: "sph_splash",
+          depth: intermediateDepthM,
+          tier: "intermediate_wave",
+          label: "Intermediate Wave Zone (2m–5m)",
+          speed: currentSpeedMs,
+        },
         geometry: {
           type: "Polygon",
           coordinates: [splashCoords],
@@ -522,10 +735,16 @@ export function generateDynamicDamPolygons(
       },
       {
         type: "Feature",
-        properties: { type: "delft_overbank", depth: Number((currentDepthM * 0.45).toFixed(1)) },
+        properties: {
+          type: "water_core",
+          depth: currentDepthM,
+          tier: "deep_core",
+          label: "Deep Core Zone (>5m)",
+          speed: currentSpeedMs,
+        },
         geometry: {
           type: "Polygon",
-          coordinates: [overbankCoords],
+          coordinates: [coreCoords],
         },
       },
     ],
@@ -534,11 +753,16 @@ export function generateDynamicDamPolygons(
   return {
     currentPos,
     currentDepthM: Number(currentDepthM.toFixed(1)),
+    intermediateDepthM,
+    overbankDepthM,
     currentSpeedMs,
+    distanceCoveredKm: Number(distanceCoveredKm.toFixed(1)),
     waterFlowGeoJSON,
     thalwegFullLine,
+    activeFlowLine,
+    flowVectors,
     originCoords: dam.coords,
     terminusCoords: thalweg[thalweg.length - 1].coords,
-    activeSubPoints,
+    activeSubPoints: activePolyline,
   };
 }

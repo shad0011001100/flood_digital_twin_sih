@@ -101,16 +101,16 @@ a { color: inherit; text-decoration: none; }
 .sidebar-nav-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .sidebar-nav-btn {
   width: 100%;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: flex-start;
   text-align: left;
-  padding: 9px 10px;
+  padding: 10px 12px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 4px;
@@ -120,40 +120,21 @@ a { color: inherit; text-decoration: none; }
 }
 
 .sidebar-nav-btn:hover {
-  background: rgba(235, 252, 114, 0.06);
-  border-color: rgba(235, 252, 114, 0.3);
+  background: rgba(235, 252, 114, 0.08);
+  border-color: rgba(235, 252, 114, 0.25);
   border-left: 3px solid var(--lime);
-}
-
-.sidebar-nav-btn-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-
-.sidebar-nav-num {
-  font: 700 10px var(--font-mono);
-  color: var(--lime);
-  flex-shrink: 0;
+  padding-left: 14px;
 }
 
 .sidebar-nav-label {
-  font: 600 11px var(--font-mono);
+  font: 600 12px var(--font-mono);
   color: var(--bone);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .sidebar-nav-btn:hover .sidebar-nav-label {
   color: var(--lime);
-}
-
-.sidebar-nav-sub {
-  font: 9px var(--font-mono);
-  color: var(--ash);
-  margin-top: 2px;
-  margin-left: 20px;
 }
 
 .sidebar-footer {

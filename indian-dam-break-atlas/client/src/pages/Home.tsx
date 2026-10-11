@@ -101,13 +101,13 @@ export default function Home() {
   };
 
   const navMenuItems = [
-    { num: "01.", label: "Modelling Chain", target: "workflow", sub: "5-Step Hydrodynamic Pipe" },
-    { num: "02.", label: "SPH vs Delft3D", target: "models", sub: "Lagrangian Shock vs SWE" },
-    { num: "03.", label: "Case Evidence", target: "cases", sub: "Chamoli, Phuktal, Kosi" },
-    { num: "04.", label: "3D Simulator", target: "simulator-section", sub: "Interactive 3D Valley Mesh" },
-    { num: "05.", label: "Open Data Stack", target: "open-data", sub: "Sentinel-1 SAR & DEMs" },
-    { num: "06.", label: "Priority Gaps", target: "gaps", sub: "4 Benchmarked Solutions" },
-    { num: "07.", label: "References", target: "references", sub: "CWC & NDMA Citations" },
+    { label: "3D Simulator", target: "simulator-section" },
+    { label: "Modelling Chain", target: "workflow" },
+    { label: "Model Lens", target: "models" },
+    { label: "Case Evidence", target: "cases" },
+    { label: "Open Data Stack", target: "open-data" },
+    { label: "Priority Gaps", target: "gaps" },
+    { label: "References", target: "references" },
   ];
 
   return (
@@ -130,7 +130,7 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Menu Title Header matching User Sketch */}
+          {/* Menu Title Header */}
           <div className="sidebar-menu-header">
             <div className="flex items-center gap-2">
               <strong>MENU</strong>
@@ -139,7 +139,7 @@ export default function Home() {
             <span className="mono">07 SECTIONS</span>
           </div>
 
-          {/* Numbered Navigation Options (1. ---, 2. ---, 3. ---) */}
+          {/* Clean Navigation Options (Direct menu items without numbers or subtitles) */}
           <nav className="sidebar-nav-list" aria-label="Main Sections">
             {navMenuItems.map((item) => (
               <button
@@ -147,11 +147,7 @@ export default function Home() {
                 className="sidebar-nav-btn"
                 onClick={() => navigate(item.target)}
               >
-                <div className="sidebar-nav-btn-top">
-                  <span className="sidebar-nav-num">{item.num}</span>
-                  <span className="sidebar-nav-label">{item.label}</span>
-                </div>
-                <span className="sidebar-nav-sub">{item.sub}</span>
+                <span className="sidebar-nav-label">{item.label}</span>
               </button>
             ))}
           </nav>

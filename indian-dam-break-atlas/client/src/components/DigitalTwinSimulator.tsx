@@ -1077,20 +1077,20 @@ export function DigitalTwinSimulator() {
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-sm bg-purple-600 shrink-0"></span>
-                <span>Catastrophic (&gt; 5.0m) &bull; Structural Shear</span>
+                <span className="w-3 h-3 rounded-sm bg-[#2563eb] border border-[#60a5fa] shrink-0"></span>
+                <span>Deep Core Zone (&gt; 5.0m) &bull; 3D Dynamic Column</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-sm bg-rose-500 shrink-0"></span>
-                <span>Severe (2.0 – 5.0m) &bull; Full Inundation</span>
+                <span className="w-3 h-3 rounded-sm bg-[#06b6d4] border border-[#0ea5e9] shrink-0"></span>
+                <span>Intermediate Wave (2.0 – 5.0m) &bull; SPH Splash</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-sm bg-amber-500 shrink-0"></span>
-                <span>Moderate (0.5 – 2.0m) &bull; Submergence</span>
+                <span className="w-3 h-3 rounded-sm bg-[#f59e0b] border border-[#fbbf24] shrink-0"></span>
+                <span>Overbank Spread (&lt; 2.0m) &bull; Lateral Fringe</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-sm bg-yellow-400 shrink-0"></span>
-                <span>Low Hazard (&lt; 0.5m) &bull; Surface Velocity</span>
+                <span className="w-3 h-1.5 bg-white rounded-full shrink-0"></span>
+                <span>Animated Flow Vectors &bull; Downstream Direction</span>
               </div>
             </div>
           )}

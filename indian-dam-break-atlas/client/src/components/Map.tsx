@@ -56,9 +56,25 @@ export function MapView({
   const waveFrontMarkerRef = useRef<any>(null);
   const settlementMarkersRef = useRef<any[]>([]);
   const waypointMarkersRef = useRef<any[]>([]);
+  const flowVectorMarkersRef = useRef<any[]>([]);
 
   // Current active dam
   const activeDam = dam || COMPREHENSIVE_NATIONAL_DAMS[0];
+
+  // Dynamic telemetry state for overlay HUD
+  const [telemetry, setTelemetry] = useState<{
+    depthM: number;
+    speedMs: number;
+    distKm: number;
+    settlementsInundated: number;
+    settlementsTotal: number;
+  }>({
+    depthM: 22,
+    speedMs: 14.8,
+    distKm: 0,
+    settlementsInundated: 0,
+    settlementsTotal: activeDam.settlements.length,
+  });
 
   // Dynamically load MapLibre GL JS if not present
   useEffect(() => {
@@ -94,85 +110,165 @@ export function MapView({
     };
   }, []);
 
-  const getStyleForBasemap = (mode: "dark" | "voyager" | "satellite") => {
-    const baseSource =
-      mode === "satellite"
-        ? {
-            type: "raster",
-            tiles: [
-              "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-            ],
-            tileSize: 256,
-            attribution: "Esri, Maxar, Earthstar Geographics",
-          }
-        : {
-            type: "raster",
-            tiles:
-              mode === "voyager"
-                ? [
-                    "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-                    "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-                    "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-                    "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-                  ]
-                : [
-                    "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-                    "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-                    "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-                    "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-                  ],
-            tileSize: 256,
-            attribution: "© CARTO, © OpenStreetMap contributors",
-          };
+  // Continuous animation loop for active flow line direction dash-array
+  useEffect(() => {
+    if (!mapLoaded || !mapRef.current) return;
 
-    const baseLayerId = mode === "satellite" ? "satellite-layer" : "carto-layer";
-    const baseSourceName = mode === "satellite" ? "satellite" : "carto";
+    let animId: number;
+    let lastTime = 0;
+    const dashPhases = [
+      [0, 2, 3],
+      [0.5, 2, 2.5],
+      [1, 2, 2],
+      [1.5, 2, 1.5],
+      [2, 2, 1],
+      [2.5, 2, 0.5],
+      [3, 2, 0],
+      [0, 0.5, 3, 1.5],
+      [0, 1, 3, 1],
+      [0, 1.5, 3, 0.5],
+    ];
+    let phaseIdx = 0;
+
+    const animate = (timestamp: number) => {
+      if (timestamp - lastTime > 60) {
+        lastTime = timestamp;
+        phaseIdx = (phaseIdx + 1) % dashPhases.length;
+        if (mapRef.current?.getLayer("active-flow-direction-line")) {
+          mapRef.current.setPaintProperty(
+            "active-flow-direction-line",
+            "line-dasharray",
+            dashPhases[phaseIdx]
+          );
+        }
+      }
+      animId = requestAnimationFrame(animate);
+    };
+
+    animId = requestAnimationFrame(animate);
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+  }, [mapLoaded]);
+
+  // Esri ArcGIS Online public tile servers (NEVER requires API keys, NO watermarks)
+  const getStyleForBasemap = (mode: "dark" | "voyager" | "satellite") => {
+    const sources: Record<string, any> = {
+      "terrain-dem": {
+        type: "raster-dem",
+        tiles: [
+          "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+        ],
+        tileSize: 256,
+        encoding: "terrarium",
+        maxzoom: 15,
+      },
+    };
+
+    const layers: any[] = [
+      {
+        id: "background-layer",
+        type: "background",
+        paint: {
+          "background-color": mode === "dark" ? "#10110c" : mode === "satellite" ? "#06090e" : "#f4f3e8",
+        },
+      },
+    ];
+
+    if (mode === "satellite") {
+      sources["esri-satellite"] = {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Esri, Maxar, Earthstar Geographics",
+      };
+      layers.push({
+        id: "esri-satellite-layer",
+        type: "raster",
+        source: "esri-satellite",
+        minzoom: 0,
+        maxzoom: 19,
+      });
+    } else if (mode === "voyager") {
+      sources["esri-topo"] = {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Esri, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, © OpenStreetMap contributors",
+      };
+      layers.push({
+        id: "esri-topo-layer",
+        type: "raster",
+        source: "esri-topo",
+        minzoom: 0,
+        maxzoom: 19,
+      });
+    } else {
+      // Dark Basemap with Base and Reference layers from Esri ArcGIS Online
+      sources["esri-dark-base"] = {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Esri, HERE, Garmin, © OpenStreetMap contributors",
+      };
+      sources["esri-dark-ref"] = {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Esri",
+      };
+      layers.push({
+        id: "esri-dark-base-layer",
+        type: "raster",
+        source: "esri-dark-base",
+        minzoom: 0,
+        maxzoom: 19,
+      });
+    }
+
+    // Hillshade layer on top of base raster
+    layers.push({
+      id: "terrain-hillshade",
+      type: "hillshade",
+      source: "terrain-dem",
+      paint: {
+        "hillshade-shadow-color": "#080a06",
+        "hillshade-highlight-color": mode === "voyager" ? "#ffffff" : mode === "satellite" ? "#ffffff" : "#38bdf8",
+        "hillshade-accent-color": mode === "dark" ? "#ebfc72" : "#38bdf8",
+        "hillshade-exaggeration": mode === "satellite" ? 0.35 : 0.85,
+      },
+    });
+
+    // Dark labels / reference layer
+    if (mode === "dark") {
+      layers.push({
+        id: "esri-dark-ref-layer",
+        type: "raster",
+        source: "esri-dark-ref",
+        minzoom: 0,
+        maxzoom: 19,
+        paint: {
+          "raster-opacity": 0.85,
+        },
+      });
+    }
 
     return {
       version: 8,
-      sources: {
-        [baseSourceName]: baseSource,
-        "terrain-dem": {
-          type: "raster-dem",
-          tiles: [
-            "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
-          ],
-          tileSize: 256,
-          encoding: "terrarium",
-          maxzoom: 15,
-        },
-      },
+      sources,
       terrain: {
         source: "terrain-dem",
         exaggeration: 1.8,
       },
-      layers: [
-        {
-          id: "background-layer",
-          type: "background",
-          paint: {
-            "background-color": "#10110c",
-          },
-        },
-        {
-          id: baseLayerId,
-          type: "raster",
-          source: baseSourceName,
-          minzoom: 0,
-          maxzoom: 19,
-        },
-        {
-          id: "terrain-hillshade",
-          type: "hillshade",
-          source: "terrain-dem",
-          paint: {
-            "hillshade-shadow-color": "#080a06",
-            "hillshade-highlight-color": mode === "voyager" ? "#ffffff" : "#ebfc72",
-            "hillshade-accent-color": "#38bdf8",
-            "hillshade-exaggeration": 0.85,
-          },
-        },
-      ],
+      layers,
     };
   };
 
@@ -221,18 +317,18 @@ export function MapView({
     });
   };
 
-  // Setup Dynamic GeoJSON Layers for Thalweg, Flow, and SAR
+  // Setup Dynamic GeoJSON Layers for Multi-tier Flood Inundation & Flow Vectors
   const setupDynamicLayers = (map: any) => {
     const dynData = generateDynamicDamPolygons(activeDam, simTimeMinutes, bifurcationSplit);
     if (!dynData) return;
 
-    // 1. Thalweg Centerline River Channel
+    // 1. Thalweg Centerline River Channel (Full Domain)
     map.addSource("thalweg-source", {
       type: "geojson",
       data: dynData.thalwegFullLine,
     });
 
-    // Glowing Thalweg Casing
+    // Thalweg Casing
     map.addLayer({
       id: "thalweg-casing",
       type: "line",
@@ -240,13 +336,13 @@ export function MapView({
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": "#0284c7",
-        "line-width": 8,
-        "line-opacity": 0.45,
-        "line-blur": 3,
+        "line-width": 6,
+        "line-opacity": 0.35,
+        "line-blur": 2,
       },
     });
 
-    // Thalweg Core Channel Line
+    // Thalweg Reference Line
     map.addLayer({
       id: "thalweg-line",
       type: "line",
@@ -254,70 +350,106 @@ export function MapView({
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": "#38bdf8",
-        "line-width": 3,
-        "line-opacity": 0.9,
-        "line-dasharray": [2, 1],
+        "line-width": 2,
+        "line-opacity": 0.65,
+        "line-dasharray": [3, 2],
       },
     });
 
-    // 2. Active Flowing Water Body Source
+    // 2. Active Flooded Downstream Flow Channel (Dam Origin -> Advancing Wave Front)
+    map.addSource("active-flow-source", {
+      type: "geojson",
+      data: dynData.activeFlowLine,
+    });
+
+    // Glowing active flow corridor casing
+    map.addLayer({
+      id: "active-flow-casing",
+      type: "line",
+      source: "active-flow-source",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#00f0ff",
+        "line-width": 9,
+        "line-opacity": 0.7,
+        "line-blur": 3,
+      },
+    });
+
+    // Animated downstream flow line with moving dash-array showing direction
+    map.addLayer({
+      id: "active-flow-direction-line",
+      type: "line",
+      source: "active-flow-source",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#ffffff",
+        "line-width": 3.5,
+        "line-dasharray": [1, 2],
+        "line-opacity": 0.95,
+      },
+    });
+
+    // 3. Multi-tier Active Flowing Water Body Source
     map.addSource("water-flow-source", {
       type: "geojson",
       data: dynData.waterFlowGeoJSON,
     });
 
-    // Delft3D Overbank Floodplain (Outer shallow diffusion)
+    // Tier 3: Overbank Spread (<2m depth): Translucent amber/hazard fringe showing lateral spread across valley slopes
     map.addLayer({
       id: "delft-overbank-layer",
       type: "fill",
       source: "water-flow-source",
       filter: ["==", "type", "delft_overbank"],
       paint: {
-        "fill-color": "#38bdf8",
-        "fill-opacity": 0.4,
+        "fill-color": "#f59e0b",
+        "fill-opacity": 0.45,
+        "fill-outline-color": "#fbbf24",
       },
     });
 
-    // SPH Violent Splash & Jetting Zone (Intermediate energy)
+    // Tier 2: Intermediate Wave Zone (2m–5m depth): Cyan/teal splash zone showing energetic hydrodynamic surge
     map.addLayer({
       id: "sph-splash-layer",
       type: "fill",
       source: "water-flow-source",
       filter: ["==", "type", "sph_splash"],
       paint: {
-        "fill-color": "#0284c7",
+        "fill-color": "#06b6d4",
         "fill-opacity": 0.65,
+        "fill-outline-color": "#0ea5e9",
       },
     });
 
-    // Deep Channel Core (Catastrophic hydraulic depth > 5m)
+    // Tier 1: Deep Core Zone (>5m depth): High-contrast vibrant blue/cyan fill
     map.addLayer({
       id: "water-core-layer",
       type: "fill",
       source: "water-flow-source",
       filter: ["==", "type", "water_core"],
       paint: {
-        "fill-color": "#6366f1",
+        "fill-color": "#2563eb",
         "fill-opacity": 0.85,
-        "fill-outline-color": "#ebfc72",
+        "fill-outline-color": "#60a5fa",
       },
     });
 
-    // 3D Flood Core Physical Volume (Catastrophic depth extrusion in gorge)
+    // 3D Flood Core Physical Volume: Dynamic fill-extrusion reflecting actual depth in meters
     map.addLayer({
       id: "water-core-3d-extrusion",
       type: "fill-extrusion",
       source: "water-flow-source",
       filter: ["==", "type", "water_core"],
       paint: {
-        "fill-extrusion-color": "#38bdf8",
-        "fill-extrusion-height": 28,
+        "fill-extrusion-color": "#0284c7",
+        "fill-extrusion-height": ["*", ["to-number", ["get", "depth"]], 6],
         "fill-extrusion-base": 0,
-        "fill-extrusion-opacity": 0.75,
+        "fill-extrusion-opacity": 0.9,
       },
     });
 
-    // 3. Sentinel-1 SAR Validation Footprint (Mocked change detection zone)
+    // 4. Sentinel-1 SAR Validation Footprint
     map.addSource("sar-source", {
       type: "geojson",
       data: dynData.waterFlowGeoJSON,
@@ -345,6 +477,12 @@ export function MapView({
     const thalwegSource = map.getSource("thalweg-source");
     if (thalwegSource) {
       thalwegSource.setData(dynData.thalwegFullLine);
+    }
+
+    // Update Active Flow Line
+    const activeFlowSource = map.getSource("active-flow-source");
+    if (activeFlowSource) {
+      activeFlowSource.setData(dynData.activeFlowLine);
     }
 
     // Update Water Flow
@@ -380,16 +518,26 @@ export function MapView({
         showSAR ? "visible" : "none"
       );
     }
+
+    // Update HUD telemetry
+    const inundatedCount = currentDam.settlements.filter((s) => timeMin >= s.arrivalMin).length;
+    setTelemetry({
+      depthM: dynData.currentDepthM,
+      speedMs: dynData.currentSpeedMs,
+      distKm: dynData.distanceCoveredKm,
+      settlementsInundated: inundatedCount,
+      settlementsTotal: currentDam.settlements.length,
+    });
   };
 
-  // Mount/Update all Symbolic Markers on the Map (Start, End, Wavefront, Settlements, Waypoints)
+  // Mount/Update all Symbolic Markers on the Map (Start, End, Wavefront, Settlements, Waypoints, Flow Vectors)
   const updateMarkersAndBeacons = (map: any, currentDam: ComprehensiveNationalDam, timeMin: number) => {
     if (!window.maplibregl) return;
 
     const dynData = generateDynamicDamPolygons(currentDam, timeMin, bifurcationSplit);
     if (!dynData) return;
 
-    // 1. STARTING POINT: DAM BREACH ORIGIN (Pulsing Red/Amber Hazard Beacon)
+    // 1. STARTING POINT: DAM BREACH ORIGIN
     if (!originMarkerRef.current) {
       const originEl = document.createElement("div");
       originEl.className = "dam-origin-beacon";
@@ -447,7 +595,7 @@ export function MapView({
       terminusMarkerRef.current.setLngLat(dynData.terminusCoords);
     }
 
-    // 3. ADVANCING SURGE WAVEFRONT CREST (Directly attached to the water's leading edge)
+    // 3. ADVANCING SURGE WAVEFRONT CREST (High-Visibility Pulsing Beacon with Direction & Depth)
     if (!waveFrontMarkerRef.current) {
       const wfEl = document.createElement("div");
       wfEl.className = "surge-wavefront-beacon";
@@ -456,14 +604,14 @@ export function MapView({
         flex-direction: column;
         align-items: center;
         pointer-events: auto;
-        z-index: 40;
+        z-index: 45;
       `;
       wfEl.innerHTML = `
-        <div id="wf-badge" style="background: #ebfc72; color: #13140e; padding: 4px 10px; border-radius: 9999px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 900; box-shadow: 0 0 20px rgba(235, 252, 114, 0.9), 0 0 0 2px #13140e; display: flex; align-items: center; gap: 6px; white-space: nowrap;">
-          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #e11d48; animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
-          🌊 SURGE CREST &bull; ${dynData.currentDepthM}m Depth &bull; ${dynData.currentSpeedMs} m/s
+        <div id="wf-badge" style="background: #ebfc72; color: #13140e; padding: 5px 12px; border-radius: 9999px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 900; box-shadow: 0 0 25px rgba(235, 252, 114, 0.95), 0 0 0 2px #13140e; display: flex; align-items: center; gap: 7px; white-space: nowrap;">
+          <span style="display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #e11d48; animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
+          <span>🌊 SURGE CREST &bull; ${dynData.currentDepthM}m Depth &bull; ${dynData.currentSpeedMs} m/s &bull; ${dynData.distanceCoveredKm} km</span>
         </div>
-        <div style="width: 2px; height: 14px; background: #ebfc72;"></div>
+        <div style="width: 2px; height: 16px; background: #ebfc72;"></div>
       `;
       waveFrontMarkerRef.current = new window.maplibregl.Marker({ element: wfEl })
         .setLngLat(dynData.currentPos)
@@ -473,14 +621,52 @@ export function MapView({
       const badge = document.getElementById("wf-badge");
       if (badge) {
         badge.innerHTML = `
-          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #e11d48; animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
-          🌊 SURGE CREST &bull; ${dynData.currentDepthM}m Depth &bull; ${dynData.currentSpeedMs} m/s
+          <span style="display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #e11d48; animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
+          <span>🌊 SURGE CREST &bull; ${dynData.currentDepthM}m Depth &bull; ${dynData.currentSpeedMs} m/s &bull; ${dynData.distanceCoveredKm} km</span>
         `;
       }
     }
 
-    // 4. DOWNSTREAM SETTLEMENTS & HABITATIONS (Dynamic Status based on simTimeMinutes)
-    // Clear old settlement markers
+    // 4. DIRECTIONAL FLOW VECTOR INDICATORS along active channel
+    flowVectorMarkersRef.current.forEach((m) => m.remove());
+    flowVectorMarkersRef.current = [];
+
+    if (showVectors && dynData.flowVectors) {
+      dynData.flowVectors.forEach((v) => {
+        const el = document.createElement("div");
+        el.className = "flow-vector-badge";
+        el.style.cssText = `
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          background: rgba(2, 132, 199, 0.92);
+          color: #ebfc72;
+          border: 1.5px solid #38bdf8;
+          border-radius: 9999px;
+          padding: 2px 7px;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 9px;
+          font-weight: 800;
+          box-shadow: 0 0 12px rgba(2, 132, 199, 0.85);
+          pointer-events: none;
+          white-space: nowrap;
+          z-index: 28;
+        `;
+        el.innerHTML = `
+          <span style="display: inline-block; transform: rotate(${v.bearingDeg}deg); font-size: 11px; color: #fff;">➔</span>
+          <span>${v.speedMs} m/s</span>
+          <span style="background: rgba(19, 20, 14, 0.9); color: #fff; padding: 1px 4px; border-radius: 3px; font-size: 8px;">${v.depthM}m</span>
+        `;
+
+        const marker = new window.maplibregl.Marker({ element: el })
+          .setLngLat(v.coords)
+          .addTo(map);
+
+        flowVectorMarkersRef.current.push(marker);
+      });
+    }
+
+    // 5. DOWNSTREAM SETTLEMENTS & HABITATIONS
     settlementMarkersRef.current.forEach((m) => m.remove());
     settlementMarkersRef.current = [];
 
@@ -533,7 +719,7 @@ export function MapView({
       settlementMarkersRef.current.push(marker);
     });
 
-    // 5. DISTANCE WAYPOINT TICK MARKERS along the thalweg
+    // 6. DISTANCE WAYPOINT TICK MARKERS along the thalweg
     waypointMarkersRef.current.forEach((m) => m.remove());
     waypointMarkersRef.current = [];
 
@@ -566,7 +752,7 @@ export function MapView({
     if (!mapRef.current || !mapLoaded) return;
     updateDynamicSimulation(mapRef.current, activeDam, simTimeMinutes, bifurcationSplit);
     updateMarkersAndBeacons(mapRef.current, activeDam, simTimeMinutes);
-  }, [simTimeMinutes, activeDam, bifurcationSplit, solverMode, showSAR, mapLoaded]);
+  }, [simTimeMinutes, activeDam, bifurcationSplit, solverMode, showSAR, showVectors, mapLoaded]);
 
   // Smooth camera flyTo when Dam changes
   useEffect(() => {
@@ -595,6 +781,45 @@ export function MapView({
   return (
     <div className={cn("relative w-full h-full min-h-[550px] overflow-hidden", className)}>
       <div ref={mapContainer} className="w-full h-full absolute inset-0" />
+
+      {/* Tactical Hydraulic Telemetry HUD Overlay (Top-Left of 3D Map) */}
+      <div className="absolute top-16 left-4 z-20 pointer-events-none hidden sm:flex flex-col gap-1.5 font-mono text-[10px]">
+        <div className="bg-[#13140e]/90 backdrop-blur-md border border-[rgba(244,243,232,0.18)] px-3 py-2 rounded-lg shadow-2xl flex flex-col gap-1 pointer-events-auto">
+          <div className="flex items-center justify-between gap-3 text-[#ebfc72] font-bold border-b border-[rgba(244,243,232,0.1)] pb-1">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>3D HYDRAULIC TWIN &bull; {activeDam.name.toUpperCase()}</span>
+            </span>
+            <span className="text-white bg-[#0284c7] px-1.5 py-0.2 rounded text-[9px]">
+              T+{simTimeMinutes}m
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[#f4f3e8] pt-0.5">
+            <div>
+              <span className="text-[#84837b]">FLOW DIRECTION: </span>
+              <span className="text-[#38bdf8] font-bold">➔ Downstream Valley</span>
+            </div>
+            <div>
+              <span className="text-[#84837b]">WAVE FRONT: </span>
+              <span className="text-emerald-400 font-bold">{telemetry.distKm} km / {activeDam.reachLengthKm} km</span>
+            </div>
+            <div>
+              <span className="text-[#84837b]">SURGE VELOCITY: </span>
+              <span className="text-[#ebfc72] font-bold">{telemetry.speedMs} m/s ({(telemetry.speedMs * 3.6).toFixed(0)} km/h)</span>
+            </div>
+            <div>
+              <span className="text-[#84837b]">PEAK DEPTH: </span>
+              <span className="text-rose-400 font-bold">{telemetry.depthM}m (3D Extrusion)</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between border-t border-[rgba(244,243,232,0.08)] pt-1 text-[9px]">
+            <span className="text-[#84837b]">SETTLEMENT IMPACT:</span>
+            <span className={telemetry.settlementsInundated > 0 ? "text-rose-400 font-bold" : "text-emerald-400 font-bold"}>
+              {telemetry.settlementsInundated} of {telemetry.settlementsTotal} Inundated
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
