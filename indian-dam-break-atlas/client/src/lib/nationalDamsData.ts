@@ -381,18 +381,60 @@ export const COMPREHENSIVE_NATIONAL_DAMS: ComprehensiveNationalDam[] = [
   },
 ];
 
+// Dynamic Simulation Parameters Interface
+export interface DynamicSimulationParams {
+  breachWidth?: number;
+  waterDepth?: number;
+  formationTime?: number;
+  manningN?: number;
+  debrisConcentration?: number;
+  bifurcationSplit?: number;
+  spillwayDischarge?: number;
+  rainfall24h?: number;
+  breachSideSlope?: number;
+  amcCondition?: "AMC-I" | "AMC-II" | "AMC-III";
+  failureMode?: string;
+}
+
 // Dynamic Flood Polygon Generator following the Dam's Thalweg Descent
 export function generateDynamicDamPolygons(
   dam: ComprehensiveNationalDam,
   simTimeMin: number,
-  bifurcationSplit: number = 70
+  paramsOrSplit: DynamicSimulationParams | number = 70
 ) {
   const thalweg = dam.thalweg;
   if (!thalweg || thalweg.length === 0) return null;
 
-  // Calculate current wavefront distance along thalweg based on simTimeMin
+  // Extract physics parameters with robust hydro-calibrated fallbacks
+  const params: DynamicSimulationParams =
+    typeof paramsOrSplit === "number"
+      ? { bifurcationSplit: paramsOrSplit }
+      : paramsOrSplit || {};
+
+  const bifurcationSplit = params.bifurcationSplit ?? 70;
+  const breachWidth = params.breachWidth ?? Math.max(30, dam.crest_length_m * 0.25);
+  const waterDepth = params.waterDepth ?? Math.round(dam.height_m * 0.85);
+  const manningN = params.manningN ?? dam.manning_n_default;
+  const debrisConcentration = Math.min(45, Math.max(0, params.debrisConcentration ?? 15));
+  const spillwayDischarge = params.spillwayDischarge ?? 0;
+  const rainfall24h = params.rainfall24h ?? 150;
+
+  // 1. Sediment bulking factor B_f = 1 / (1 - Cs)
+  const bulkingFactor = 1 / (1 - debrisConcentration / 100);
+
+  // 2. Head and roughness hydrodynamics
+  const nominalHead = Math.max(5, dam.height_m * 0.85);
+  const headRatio = Math.max(0.3, waterDepth / nominalHead);
+  const widthRatio = Math.max(0.4, breachWidth / 60);
+  const roughnessRatio = dam.manning_n_default / Math.max(0.015, manningN);
+
+  // 3. Dynamic Wave Propagation Speed Factor based on Head, Roughness, and Catchment Rain
+  const speedFactor = Math.sqrt(headRatio) * Math.pow(roughnessRatio, 0.45) * (1 + (rainfall24h / 500) * 0.15);
+  const effectiveSimTime = simTimeMin * speedFactor;
+
+  // Calculate current wavefront distance along thalweg based on effectiveSimTime
   const maxTime = thalweg[thalweg.length - 1].arrivalMin;
-  const clampedTime = Math.max(0, simTimeMin);
+  const clampedTime = Math.max(0, effectiveSimTime);
 
   // Find wave front position along thalweg
   let currentPos: [number, number] = thalweg[0].coords;
@@ -429,6 +471,12 @@ export function generateDynamicDamPolygons(
     }
   }
 
+  // 4. Physical Flood Depth scaled by Water Head, Bulking Factor, and Backwater Roughness
+  currentDepthM = Number(
+    (currentDepthM * Math.pow(headRatio, 0.75) * Math.sqrt(bulkingFactor) * (1 + (1 / roughnessRatio - 1) * 0.2)).toFixed(1)
+  );
+  currentSpeedMs = Number((currentSpeedMs * speedFactor).toFixed(1));
+
   // Multi-tier depths for hydraulic classification
   const intermediateDepthM = Number(Math.max(2.1, Math.min(4.9, currentDepthM * 0.55)).toFixed(1));
   const overbankDepthM = Number(Math.min(1.9, Math.max(0.4, currentDepthM * 0.18)).toFixed(1));
@@ -449,11 +497,17 @@ export function generateDynamicDamPolygons(
 
   const splitFactor = Math.max(0.3, bifurcationSplit / 100);
 
+  // Lateral expansion factor scaling with breach width, sediment bulking, and spillway release
+  const parameterSpreadMultiplier = Math.max(
+    0.65,
+    Math.pow(widthRatio, 0.4) * Math.pow(bulkingFactor, 0.35) * (1 + (spillwayDischarge / 10000) * 0.25)
+  );
+
   // Gradient & terrain morphology factor: flatter basins expand significantly wider
   const gradient = dam.downstream_gradient || 0.025;
   // Steep Himalayan gorges (gradient > 0.04) constrict water into high velocity torrents (~600m - 1200m)
   // Lowland floodplains (gradient < 0.012) spread widely across terraces (~2000m - 4500m)
-  const terrainExpansionFactor = 1.0 + Math.max(0, (0.045 - gradient) * 22) * 0.75;
+  const terrainExpansionFactor = (1.0 + Math.max(0, (0.045 - gradient) * 22) * 0.75) * parameterSpreadMultiplier;
 
   let shockwaveArcCoords: [number, number][] = [];
   const leftStreamline: [number, number][] = [];

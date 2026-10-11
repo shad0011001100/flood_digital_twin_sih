@@ -4,6 +4,7 @@ import {
   ComprehensiveNationalDam,
   COMPREHENSIVE_NATIONAL_DAMS,
   generateDynamicDamPolygons,
+  DynamicSimulationParams,
   DownstreamSettlement,
 } from "@/lib/nationalDamsData";
 
@@ -26,6 +27,16 @@ export interface MapViewProps {
   simTimeMinutes?: number;
   dam?: ComprehensiveNationalDam;
   bifurcationSplit?: number;
+  breachWidth?: number;
+  waterDepth?: number;
+  formationTime?: number;
+  manningN?: number;
+  debrisConcentration?: number;
+  spillwayDischarge?: number;
+  rainfall24h?: number;
+  breachSideSlope?: number;
+  amcCondition?: "AMC-I" | "AMC-II" | "AMC-III";
+  failureMode?: string;
   showInfrastructure?: boolean;
   onMapReady?: (map: any) => void;
 }
@@ -43,6 +54,16 @@ export function MapView({
   simTimeMinutes = 45,
   dam,
   bifurcationSplit = 70,
+  breachWidth,
+  waterDepth,
+  formationTime,
+  manningN,
+  debrisConcentration,
+  spillwayDischarge,
+  rainfall24h,
+  breachSideSlope,
+  amcCondition,
+  failureMode,
   showInfrastructure = true,
   onMapReady,
 }: MapViewProps) {
@@ -75,6 +96,21 @@ export function MapView({
     settlementsInundated: 0,
     settlementsTotal: activeDam.settlements.length,
   });
+
+  // Consolidated physics parameters for dynamic hydrodynamic simulation
+  const physicsParams: DynamicSimulationParams = {
+    bifurcationSplit,
+    breachWidth,
+    waterDepth,
+    formationTime,
+    manningN,
+    debrisConcentration,
+    spillwayDischarge,
+    rainfall24h,
+    breachSideSlope,
+    amcCondition,
+    failureMode,
+  };
 
   // Dynamically load MapLibre GL JS if not present
   useEffect(() => {
@@ -169,7 +205,7 @@ export function MapView({
     };
   }, [mapLoaded]);
 
-  // Esri ArcGIS Online public tile servers (NEVER requires API keys, NO watermarks)
+  // Esri ArcGIS Online public tile servers (All 3 basemaps loaded in unified style for zero-reload switching)
   const getStyleForBasemap = (mode: "dark" | "voyager" | "satellite") => {
     const sources: Record<string, any> = {
       "terrain-dem": {
@@ -181,6 +217,38 @@ export function MapView({
         encoding: "terrarium",
         maxzoom: 15,
       },
+      "esri-dark-base": {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Esri, HERE, Garmin, © OpenStreetMap contributors",
+      },
+      "esri-dark-ref": {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Esri",
+      },
+      "esri-topo": {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Esri, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, © OpenStreetMap contributors",
+      },
+      "esri-satellite": {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Esri, Maxar, Earthstar Geographics",
+      },
     };
 
     const layers: any[] = [
@@ -191,93 +259,53 @@ export function MapView({
           "background-color": mode === "dark" ? "#10110c" : mode === "satellite" ? "#06090e" : "#f4f3e8",
         },
       },
-    ];
-
-    if (mode === "satellite") {
-      sources["esri-satellite"] = {
-        type: "raster",
-        tiles: [
-          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        ],
-        tileSize: 256,
-        attribution: "Esri, Maxar, Earthstar Geographics",
-      };
-      layers.push({
+      {
         id: "esri-satellite-layer",
         type: "raster",
         source: "esri-satellite",
         minzoom: 0,
         maxzoom: 19,
-      });
-    } else if (mode === "voyager") {
-      sources["esri-topo"] = {
-        type: "raster",
-        tiles: [
-          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
-        ],
-        tileSize: 256,
-        attribution: "Esri, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, © OpenStreetMap contributors",
-      };
-      layers.push({
+        layout: { visibility: mode === "satellite" ? "visible" : "none" },
+      },
+      {
         id: "esri-topo-layer",
         type: "raster",
         source: "esri-topo",
         minzoom: 0,
         maxzoom: 19,
-      });
-    } else {
-      // Dark Basemap with Base and Reference layers from Esri ArcGIS Online
-      sources["esri-dark-base"] = {
-        type: "raster",
-        tiles: [
-          "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-        ],
-        tileSize: 256,
-        attribution: "Esri, HERE, Garmin, © OpenStreetMap contributors",
-      };
-      sources["esri-dark-ref"] = {
-        type: "raster",
-        tiles: [
-          "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
-        ],
-        tileSize: 256,
-        attribution: "Esri",
-      };
-      layers.push({
+        layout: { visibility: mode === "voyager" ? "visible" : "none" },
+      },
+      {
         id: "esri-dark-base-layer",
         type: "raster",
         source: "esri-dark-base",
         minzoom: 0,
         maxzoom: 19,
-      });
-    }
-
-    // Hillshade layer on top of base raster
-    layers.push({
-      id: "terrain-hillshade",
-      type: "hillshade",
-      source: "terrain-dem",
-      paint: {
-        "hillshade-shadow-color": "#080a06",
-        "hillshade-highlight-color": mode === "voyager" ? "#ffffff" : mode === "satellite" ? "#ffffff" : "#38bdf8",
-        "hillshade-accent-color": mode === "dark" ? "#ebfc72" : "#38bdf8",
-        "hillshade-exaggeration": mode === "satellite" ? 0.35 : 0.85,
+        layout: { visibility: mode === "dark" ? "visible" : "none" },
       },
-    });
-
-    // Dark labels / reference layer
-    if (mode === "dark") {
-      layers.push({
+      {
+        id: "terrain-hillshade",
+        type: "hillshade",
+        source: "terrain-dem",
+        paint: {
+          "hillshade-shadow-color": "#080a06",
+          "hillshade-highlight-color": mode === "voyager" ? "#ffffff" : mode === "satellite" ? "#ffffff" : "#38bdf8",
+          "hillshade-accent-color": mode === "dark" ? "#ebfc72" : "#38bdf8",
+          "hillshade-exaggeration": mode === "satellite" ? 0.35 : 0.85,
+        },
+      },
+      {
         id: "esri-dark-ref-layer",
         type: "raster",
         source: "esri-dark-ref",
         minzoom: 0,
         maxzoom: 19,
+        layout: { visibility: mode === "dark" ? "visible" : "none" },
         paint: {
           "raster-opacity": 0.85,
         },
-      });
-    }
+      },
+    ];
 
     return {
       version: 8,
@@ -327,7 +355,7 @@ export function MapView({
     map.on("load", () => {
       setupTerrain(map);
       setupDynamicLayers(map);
-      updateMarkersAndBeacons(map, activeDam, simTimeMinutes);
+      updateMarkersAndBeacons(map, activeDam, simTimeMinutes, physicsParams);
 
       mapRef.current = map;
       setMapLoaded(true);
@@ -337,7 +365,7 @@ export function MapView({
 
   // Setup Dynamic GeoJSON Layers for Multi-tier Flood Inundation & Flow Vectors
   const setupDynamicLayers = (map: any) => {
-    const dynData = generateDynamicDamPolygons(activeDam, simTimeMinutes, bifurcationSplit);
+    const dynData = generateDynamicDamPolygons(activeDam, simTimeMinutes, physicsParams);
     if (!dynData) return;
 
     // 1. Thalweg Centerline River Channel (Full Domain)
@@ -582,8 +610,13 @@ export function MapView({
   };
 
   // Update GeoJSON and Layers when Dam, Time, or Solver changes
-  const updateDynamicSimulation = (map: any, currentDam: ComprehensiveNationalDam, timeMin: number, split: number) => {
-    const dynData = generateDynamicDamPolygons(currentDam, timeMin, split);
+  const updateDynamicSimulation = (
+    map: any,
+    currentDam: ComprehensiveNationalDam,
+    timeMin: number,
+    params: DynamicSimulationParams
+  ) => {
+    const dynData = generateDynamicDamPolygons(currentDam, timeMin, params);
     if (!dynData) return;
 
     // Update Thalweg
@@ -654,10 +687,15 @@ export function MapView({
   };
 
   // Mount/Update all Symbolic Markers on the Map (Start, End, Wavefront, Settlements, Waypoints, Flow Vectors)
-  const updateMarkersAndBeacons = (map: any, currentDam: ComprehensiveNationalDam, timeMin: number) => {
+  const updateMarkersAndBeacons = (
+    map: any,
+    currentDam: ComprehensiveNationalDam,
+    timeMin: number,
+    params: DynamicSimulationParams
+  ) => {
     if (!window.maplibregl) return;
 
-    const dynData = generateDynamicDamPolygons(currentDam, timeMin, bifurcationSplit);
+    const dynData = generateDynamicDamPolygons(currentDam, timeMin, params);
     if (!dynData) return;
 
     // 1. STARTING POINT: DAM BREACH ORIGIN (Elevated pin to keep water body beneath 100% visible)
@@ -878,12 +916,30 @@ export function MapView({
     });
   };
 
-  // React to prop changes (time, dam, split, solver)
+  // React to prop changes (time, dam, split, solver, and all physical parameters)
   useEffect(() => {
     if (!mapRef.current || !mapLoaded) return;
-    updateDynamicSimulation(mapRef.current, activeDam, simTimeMinutes, bifurcationSplit);
-    updateMarkersAndBeacons(mapRef.current, activeDam, simTimeMinutes);
-  }, [simTimeMinutes, activeDam, bifurcationSplit, solverMode, showSAR, showVectors, mapLoaded]);
+    updateDynamicSimulation(mapRef.current, activeDam, simTimeMinutes, physicsParams);
+    updateMarkersAndBeacons(mapRef.current, activeDam, simTimeMinutes, physicsParams);
+  }, [
+    simTimeMinutes,
+    activeDam,
+    bifurcationSplit,
+    breachWidth,
+    waterDepth,
+    formationTime,
+    manningN,
+    debrisConcentration,
+    spillwayDischarge,
+    rainfall24h,
+    breachSideSlope,
+    amcCondition,
+    failureMode,
+    solverMode,
+    showSAR,
+    showVectors,
+    mapLoaded,
+  ]);
 
   // Smooth camera fitBounds / flyTo when Dam changes
   useEffect(() => {
@@ -920,16 +976,30 @@ export function MapView({
     }
   }, [activeDam.id]);
 
-  // Style change when basemap changes
+  // Instant, zero-flicker basemap toggle WITHOUT resetting map style or losing simulation layers
   useEffect(() => {
     if (!mapRef.current || !mapLoaded) return;
-    mapRef.current.setStyle(getStyleForBasemap(basemap));
-    mapRef.current.once("style.load", () => {
-      setupTerrain(mapRef.current);
-      setupDynamicLayers(mapRef.current);
-      updateMarkersAndBeacons(mapRef.current, activeDam, simTimeMinutes);
-    });
-  }, [basemap]);
+    const map = mapRef.current;
+    if (map.getLayer("esri-dark-base-layer")) {
+      map.setLayoutProperty("esri-dark-base-layer", "visibility", basemap === "dark" ? "visible" : "none");
+    }
+    if (map.getLayer("esri-dark-ref-layer")) {
+      map.setLayoutProperty("esri-dark-ref-layer", "visibility", basemap === "dark" ? "visible" : "none");
+    }
+    if (map.getLayer("esri-topo-layer")) {
+      map.setLayoutProperty("esri-topo-layer", "visibility", basemap === "voyager" ? "visible" : "none");
+    }
+    if (map.getLayer("esri-satellite-layer")) {
+      map.setLayoutProperty("esri-satellite-layer", "visibility", basemap === "satellite" ? "visible" : "none");
+    }
+    if (map.getLayer("terrain-hillshade")) {
+      map.setPaintProperty(
+        "terrain-hillshade",
+        "hillshade-exaggeration",
+        basemap === "satellite" ? 0.35 : 0.85
+      );
+    }
+  }, [basemap, mapLoaded]);
 
   return (
     <div className={cn("relative w-full h-full min-h-[550px] overflow-hidden", className)}>
