@@ -447,19 +447,29 @@ export function generateDynamicDamPolygons(
   // Active channel polyline for line and vector rendering
   let activePolyline: [number, number][] = [];
 
-  const splitFactor = bifurcationSplit / 100;
+  const splitFactor = Math.max(0.3, bifurcationSplit / 100);
+
+  // Gradient & terrain morphology factor: flatter basins expand significantly wider
+  const gradient = dam.downstream_gradient || 0.025;
+  // Steep Himalayan gorges (gradient > 0.04) constrict water into high velocity torrents (~600m - 1200m)
+  // Lowland floodplains (gradient < 0.012) spread widely across terraces (~2000m - 4500m)
+  const terrainExpansionFactor = 1.0 + Math.max(0, (0.045 - gradient) * 22) * 0.75;
+
+  let shockwaveArcCoords: [number, number][] = [];
+  const leftStreamline: [number, number][] = [];
+  const rightStreamline: [number, number][] = [];
 
   // Case 1: T = 0 (Breach initiation at Dam Origin)
-  // Generate robust valid closed convex polygons (12 vertices each) so MapLibre never discards them
+  // Generate robust valid closed convex polygons (16 vertices each) so MapLibre never discards them
   if (clampedTime <= 0 || distanceCoveredKm < 0.1) {
     const origin = thalweg[0].coords;
     const nextPt = thalweg[1] ? thalweg[1].coords : [origin[0] + 0.01, origin[1] - 0.01];
     const initialHeading = Math.atan2(nextPt[1] - origin[1], nextPt[0] - origin[0]);
 
-    const numPts = 12;
-    const rCore = 0.0035 * splitFactor;
-    const rSplash = rCore * 1.7;
-    const rOverbank = rCore * 2.6;
+    const numPts = 16;
+    const rCore = Math.max(0.0055, (thalweg[0].channelWidthM / 111320) * 1.8 * splitFactor);
+    const rSplash = rCore * 1.6;
+    const rOverbank = rCore * 2.4;
 
     const coreRing: [number, number][] = [];
     const splashRing: [number, number][] = [];
@@ -467,8 +477,8 @@ export function generateDynamicDamPolygons(
 
     for (let i = 0; i < numPts; i++) {
       const angle = (i / numPts) * Math.PI * 2;
-      // Elongate slightly downstream
-      const stretch = 1.0 + 0.4 * Math.cos(angle - initialHeading);
+      // Elongate downstream along the river valley
+      const stretch = 1.0 + 0.5 * Math.cos(angle - initialHeading);
       const dlng = Math.cos(angle) * stretch;
       const dlat = Math.sin(angle) * stretch;
 
@@ -485,7 +495,12 @@ export function generateDynamicDamPolygons(
     splashCoords = splashRing;
     overbankCoords = overbankRing;
 
-    activePolyline = [origin, [origin[0] + Math.cos(initialHeading) * 0.002, origin[1] + Math.sin(initialHeading) * 0.002]];
+    activePolyline = [
+      origin,
+      [origin[0] + Math.cos(initialHeading) * 0.003, origin[1] + Math.sin(initialHeading) * 0.003],
+    ];
+
+    shockwaveArcCoords = splashRing.slice(0, 8);
 
     const bearingDeg = Math.round(((Math.atan2(nextPt[0] - origin[0], nextPt[1] - origin[1]) * 180) / Math.PI + 360) % 360);
     flowVectors.push({
@@ -536,12 +551,12 @@ export function generateDynamicDamPolygons(
       });
     }
 
-    // Interpolate smoothly between checkpoints (every ~400m)
+    // Interpolate smoothly between checkpoints (every ~400m - 600m)
     for (let i = 0; i < baseCheckpoints.length - 1; i++) {
       const pA = baseCheckpoints[i];
       const pB = baseCheckpoints[i + 1];
       const segDist = Math.max(0.1, pB.distanceKm - pA.distanceKm);
-      const subSteps = Math.max(2, Math.min(8, Math.ceil(segDist / 0.8)));
+      const subSteps = Math.max(3, Math.min(10, Math.ceil(segDist / 0.7)));
 
       for (let s = 0; s < subSteps; s++) {
         const t = s / subSteps;
@@ -593,11 +608,19 @@ export function generateDynamicDamPolygons(
       const nx = -ty; // Perpendicular normal
       const ny = tx;
 
-      // Base channel offset in degrees
-      const baseW = Math.max(0.0022, (pt.widthM / 111320) * splitFactor);
-      const wCore = baseW * (0.9 + 0.3 * (idx / K));
-      const wSplash = wCore * 1.65;
-      const wOverbank = wCore * 2.5;
+      // Realistic terrain-conforming hydraulic width:
+      // - Narrow & deep in steep upstream gorges
+      // - Spreads wide across flat valley terraces and floodplains downstream
+      const reachProgress = idx / Math.max(1, K - 1);
+      const downstreamExpansion = 1.0 + reachProgress * 1.35;
+      const physicalChannelDeg = (pt.widthM / 111320);
+
+      // Calibrated to ensure distinct visibility at zoom 10-14 while strictly honoring terrain morphology
+      const baseW = Math.max(0.0050, physicalChannelDeg * 1.7 * splitFactor) * terrainExpansionFactor * downstreamExpansion;
+
+      const wCore = baseW * 0.85;
+      const wSplash = baseW * 1.45;
+      const wOverbank = baseW * 2.25;
 
       leftCore.push([pt.coords[0] + nx * wCore, pt.coords[1] + ny * wCore]);
       rightCore.push([pt.coords[0] - nx * wCore, pt.coords[1] - ny * wCore]);
@@ -608,8 +631,12 @@ export function generateDynamicDamPolygons(
       leftOverbank.push([pt.coords[0] + nx * wOverbank, pt.coords[1] + ny * wOverbank]);
       rightOverbank.push([pt.coords[0] - nx * wOverbank, pt.coords[1] - ny * wOverbank]);
 
-      // Sample flow vector beacons every 4-6 points or at key settlement junctions
-      if (idx > 0 && (idx % Math.max(3, Math.floor(K / 5)) === 0 || idx === K - 1)) {
+      // Internal surface streamlines for water motion
+      leftStreamline.push([pt.coords[0] + nx * (wCore * 0.45), pt.coords[1] + ny * (wCore * 0.45)]);
+      rightStreamline.push([pt.coords[0] - nx * (wCore * 0.45), pt.coords[1] - ny * (wCore * 0.45)]);
+
+      // Sample flow vector beacons every 3-5 points along the inundated reach
+      if (idx > 0 && (idx % Math.max(2, Math.floor(K / 6)) === 0 || idx === K - 1)) {
         const bearingDeg = Math.round(((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360);
         flowVectors.push({
           coords: pt.coords,
@@ -621,7 +648,7 @@ export function generateDynamicDamPolygons(
       }
     });
 
-    // Rounded hydrodynamic surge crest nose at wave front (idx = K - 1)
+    // Rounded hydrodynamic surge crest bore nose at advancing wavefront (idx = K - 1)
     const lastPt = samplePts[K - 1].coords;
     const prevPt = samplePts[Math.max(0, K - 2)].coords;
     const frontDx = lastPt[0] - prevPt[0];
@@ -632,17 +659,18 @@ export function generateDynamicDamPolygons(
     const fnx = -fty;
     const fny = ftx;
 
-    const baseW = Math.max(0.0022, (samplePts[K - 1].widthM / 111320) * splitFactor) * 1.2;
-    const wCore = baseW;
-    const wSplash = baseW * 1.65;
-    const wOverbank = baseW * 2.5;
+    const lastPhysicalChannelDeg = (samplePts[K - 1].widthM / 111320);
+    const frontBaseW = Math.max(0.0050, lastPhysicalChannelDeg * 1.7 * splitFactor) * terrainExpansionFactor * 2.35;
+    const wCoreFront = frontBaseW * 0.85;
+    const wSplashFront = frontBaseW * 1.45;
+    const wOverbankFront = frontBaseW * 2.25;
 
     // Curved parabolic surge nose points from left bank to right bank
     const noseCore: [number, number][] = [];
     const noseSplash: [number, number][] = [];
     const noseOverbank: [number, number][] = [];
 
-    const noseSteps = 5;
+    const noseSteps = 7;
     for (let s = 1; s <= noseSteps; s++) {
       const alpha = (Math.PI / 2) - (s / (noseSteps + 1)) * Math.PI; // from +pi/2 to -pi/2
       const cosA = Math.cos(alpha);
@@ -650,18 +678,21 @@ export function generateDynamicDamPolygons(
 
       // Core nose
       noseCore.push([
-        lastPt[0] + (ftx * cosA * 1.2 + fnx * sinA) * wCore,
-        lastPt[1] + (fty * cosA * 1.2 + fny * sinA) * wCore,
+        lastPt[0] + (ftx * cosA * 1.35 + fnx * sinA) * wCoreFront,
+        lastPt[1] + (fty * cosA * 1.35 + fny * sinA) * wCoreFront,
       ]);
       // Splash nose
-      noseSplash.push([
-        lastPt[0] + (ftx * cosA * 1.2 + fnx * sinA) * wSplash,
-        lastPt[1] + (fty * cosA * 1.2 + fny * sinA) * wSplash,
-      ]);
+      const splashPt: [number, number] = [
+        lastPt[0] + (ftx * cosA * 1.35 + fnx * sinA) * wSplashFront,
+        lastPt[1] + (fty * cosA * 1.35 + fny * sinA) * wSplashFront,
+      ];
+      noseSplash.push(splashPt);
+      shockwaveArcCoords.push(splashPt);
+
       // Overbank nose
       noseOverbank.push([
-        lastPt[0] + (ftx * cosA * 1.2 + fnx * sinA) * wOverbank,
-        lastPt[1] + (fty * cosA * 1.2 + fny * sinA) * wOverbank,
+        lastPt[0] + (ftx * cosA * 1.35 + fnx * sinA) * wOverbankFront,
+        lastPt[1] + (fty * cosA * 1.35 + fny * sinA) * wOverbankFront,
       ]);
     }
 
@@ -696,6 +727,44 @@ export function generateDynamicDamPolygons(
         geometry: {
           type: "LineString",
           coordinates: activePolyline.length >= 2 ? activePolyline : [dam.coords, [dam.coords[0] + 0.001, dam.coords[1] - 0.001]],
+        },
+      },
+    ],
+  };
+
+  // Internal longitudinal flow streamlines for water current visual motion
+  const streamlinesGeoJSON = {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: { name: "Left Streamline Current" },
+        geometry: {
+          type: "LineString",
+          coordinates: leftStreamline.length >= 2 ? leftStreamline : activePolyline,
+        },
+      },
+      {
+        type: "Feature",
+        properties: { name: "Right Streamline Current" },
+        geometry: {
+          type: "LineString",
+          coordinates: rightStreamline.length >= 2 ? rightStreamline : activePolyline,
+        },
+      },
+    ],
+  };
+
+  // Leading Advancing Hydrodynamic Shockwave Arc
+  const shockwaveArcGeoJSON = {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: { name: "Advancing Hydraulic Shockwave Bore", speed: currentSpeedMs, depth: currentDepthM },
+        geometry: {
+          type: "LineString",
+          coordinates: shockwaveArcCoords.length >= 2 ? shockwaveArcCoords : [dam.coords, [dam.coords[0] + 0.001, dam.coords[1] - 0.001]],
         },
       },
     ],
@@ -760,6 +829,8 @@ export function generateDynamicDamPolygons(
     waterFlowGeoJSON,
     thalwegFullLine,
     activeFlowLine,
+    streamlinesGeoJSON,
+    shockwaveArcGeoJSON,
     flowVectors,
     originCoords: dam.coords,
     terminusCoords: thalweg[thalweg.length - 1].coords,

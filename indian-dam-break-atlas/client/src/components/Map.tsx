@@ -110,7 +110,7 @@ export function MapView({
     };
   }, []);
 
-  // Continuous animation loop for active flow line direction dash-array
+  // Continuous hydrodynamic animation loop for active downstream flow, surface streamlines, and shockwave bore
   useEffect(() => {
     if (!mapLoaded || !mapRef.current) return;
 
@@ -131,15 +131,33 @@ export function MapView({
     let phaseIdx = 0;
 
     const animate = (timestamp: number) => {
-      if (timestamp - lastTime > 60) {
+      if (timestamp - lastTime > 45) {
         lastTime = timestamp;
         phaseIdx = (phaseIdx + 1) % dashPhases.length;
+        const streamlinePhaseIdx = (phaseIdx + 4) % dashPhases.length;
+
+        // 1. Central high-velocity flow stream
         if (mapRef.current?.getLayer("active-flow-direction-line")) {
           mapRef.current.setPaintProperty(
             "active-flow-direction-line",
             "line-dasharray",
             dashPhases[phaseIdx]
           );
+        }
+
+        // 2. Lateral surface streamlines
+        if (mapRef.current?.getLayer("streamlines-line")) {
+          mapRef.current.setPaintProperty(
+            "streamlines-line",
+            "line-dasharray",
+            dashPhases[streamlinePhaseIdx]
+          );
+        }
+
+        // 3. Advancing shockwave front pulse
+        if (mapRef.current?.getLayer("shockwave-glow")) {
+          const pulseOpacity = 0.70 + 0.30 * Math.sin(timestamp * 0.007);
+          mapRef.current.setPaintProperty("shockwave-glow", "line-opacity", pulseOpacity);
         }
       }
       animId = requestAnimationFrame(animate);
@@ -356,47 +374,13 @@ export function MapView({
       },
     });
 
-    // 2. Active Flooded Downstream Flow Channel (Dam Origin -> Advancing Wave Front)
-    map.addSource("active-flow-source", {
-      type: "geojson",
-      data: dynData.activeFlowLine,
-    });
-
-    // Glowing active flow corridor casing
-    map.addLayer({
-      id: "active-flow-casing",
-      type: "line",
-      source: "active-flow-source",
-      layout: { "line-join": "round", "line-cap": "round" },
-      paint: {
-        "line-color": "#00f0ff",
-        "line-width": 9,
-        "line-opacity": 0.7,
-        "line-blur": 3,
-      },
-    });
-
-    // Animated downstream flow line with moving dash-array showing direction
-    map.addLayer({
-      id: "active-flow-direction-line",
-      type: "line",
-      source: "active-flow-source",
-      layout: { "line-join": "round", "line-cap": "round" },
-      paint: {
-        "line-color": "#ffffff",
-        "line-width": 3.5,
-        "line-dasharray": [1, 2],
-        "line-opacity": 0.95,
-      },
-    });
-
-    // 3. Multi-tier Active Flowing Water Body Source
+    // 2. Multi-tier Inundation Water Body Source
     map.addSource("water-flow-source", {
       type: "geojson",
       data: dynData.waterFlowGeoJSON,
     });
 
-    // Tier 3: Overbank Spread (<2m depth): Translucent amber/hazard fringe showing lateral spread across valley slopes
+    // Tier 3: Overbank Spread (<2m depth): Luminous hazard amber wash showing lateral spread across valley terraces
     map.addLayer({
       id: "delft-overbank-layer",
       type: "fill",
@@ -404,52 +388,181 @@ export function MapView({
       filter: ["==", "type", "delft_overbank"],
       paint: {
         "fill-color": "#f59e0b",
-        "fill-opacity": 0.45,
-        "fill-outline-color": "#fbbf24",
+        "fill-opacity": 0.50,
       },
     });
 
-    // Tier 2: Intermediate Wave Zone (2m–5m depth): Cyan/teal splash zone showing energetic hydrodynamic surge
+    map.addLayer({
+      id: "delft-overbank-outline",
+      type: "line",
+      source: "water-flow-source",
+      filter: ["==", "type", "delft_overbank"],
+      paint: {
+        "line-color": "#fbbf24",
+        "line-width": 2.5,
+        "line-dasharray": [4, 2],
+        "line-opacity": 0.85,
+      },
+    });
+
+    // Tier 2: Intermediate Wave Zone (2m–5m depth): Vibrant cerulean / azure splash zone
     map.addLayer({
       id: "sph-splash-layer",
       type: "fill",
       source: "water-flow-source",
       filter: ["==", "type", "sph_splash"],
       paint: {
-        "fill-color": "#06b6d4",
-        "fill-opacity": 0.65,
-        "fill-outline-color": "#0ea5e9",
+        "fill-color": "#0284c7",
+        "fill-opacity": 0.70,
       },
     });
 
-    // Tier 1: Deep Core Zone (>5m depth): High-contrast vibrant blue/cyan fill
+    map.addLayer({
+      id: "sph-splash-outline",
+      type: "line",
+      source: "water-flow-source",
+      filter: ["==", "type", "sph_splash"],
+      paint: {
+        "line-color": "#38bdf8",
+        "line-width": 3,
+        "line-opacity": 0.9,
+      },
+    });
+
+    // Tier 1: Deep Core Zone (>5m depth): High-contrast radiant electric cyan fill
     map.addLayer({
       id: "water-core-layer",
       type: "fill",
       source: "water-flow-source",
       filter: ["==", "type", "water_core"],
       paint: {
-        "fill-color": "#2563eb",
-        "fill-opacity": 0.85,
-        "fill-outline-color": "#60a5fa",
+        "fill-color": "#00e5ff",
+        "fill-opacity": 0.88,
       },
     });
 
-    // 3D Flood Core Physical Volume: Dynamic fill-extrusion reflecting actual depth in meters
+    // Glowing Neon Water Core Boundary
     map.addLayer({
-      id: "water-core-3d-extrusion",
-      type: "fill-extrusion",
+      id: "water-core-glow",
+      type: "line",
       source: "water-flow-source",
       filter: ["==", "type", "water_core"],
       paint: {
-        "fill-extrusion-color": "#0284c7",
-        "fill-extrusion-height": ["*", ["to-number", ["get", "depth"]], 6],
-        "fill-extrusion-base": 0,
-        "fill-extrusion-opacity": 0.9,
+        "line-color": "#00ffff",
+        "line-width": 7,
+        "line-blur": 3,
+        "line-opacity": 0.85,
       },
     });
 
-    // 4. Sentinel-1 SAR Validation Footprint
+    map.addLayer({
+      id: "water-core-boundary",
+      type: "line",
+      source: "water-flow-source",
+      filter: ["==", "type", "water_core"],
+      paint: {
+        "line-color": "#ffffff",
+        "line-width": 2.5,
+        "line-opacity": 0.95,
+      },
+    });
+
+    // 3. Internal Longitudinal Water Current Streamlines
+    map.addSource("streamlines-source", {
+      type: "geojson",
+      data: dynData.streamlinesGeoJSON,
+    });
+
+    map.addLayer({
+      id: "streamlines-glow",
+      type: "line",
+      source: "streamlines-source",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#00e5ff",
+        "line-width": 4.5,
+        "line-blur": 2,
+        "line-opacity": 0.65,
+      },
+    });
+
+    map.addLayer({
+      id: "streamlines-line",
+      type: "line",
+      source: "streamlines-source",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#ffffff",
+        "line-width": 2.2,
+        "line-dasharray": [2, 3],
+        "line-opacity": 0.95,
+      },
+    });
+
+    // 4. Central Active Flooded High-Velocity Channel
+    map.addSource("active-flow-source", {
+      type: "geojson",
+      data: dynData.activeFlowLine,
+    });
+
+    map.addLayer({
+      id: "active-flow-casing",
+      type: "line",
+      source: "active-flow-source",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#00f0ff",
+        "line-width": 11,
+        "line-opacity": 0.75,
+        "line-blur": 4,
+      },
+    });
+
+    map.addLayer({
+      id: "active-flow-direction-line",
+      type: "line",
+      source: "active-flow-source",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#ffffff",
+        "line-width": 4,
+        "line-dasharray": [1.5, 2],
+        "line-opacity": 0.95,
+      },
+    });
+
+    // 5. Advancing Hydrodynamic Shockwave Wavefront Bore
+    map.addSource("shockwave-source", {
+      type: "geojson",
+      data: dynData.shockwaveArcGeoJSON,
+    });
+
+    map.addLayer({
+      id: "shockwave-glow",
+      type: "line",
+      source: "shockwave-source",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#ebfc72",
+        "line-width": 9,
+        "line-blur": 4,
+        "line-opacity": 0.95,
+      },
+    });
+
+    map.addLayer({
+      id: "shockwave-line",
+      type: "line",
+      source: "shockwave-source",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#ffffff",
+        "line-width": 3.5,
+        "line-opacity": 1.0,
+      },
+    });
+
+    // 6. Sentinel-1 SAR Validation Footprint
     map.addSource("sar-source", {
       type: "geojson",
       data: dynData.waterFlowGeoJSON,
@@ -479,44 +592,54 @@ export function MapView({
       thalwegSource.setData(dynData.thalwegFullLine);
     }
 
-    // Update Active Flow Line
-    const activeFlowSource = map.getSource("active-flow-source");
-    if (activeFlowSource) {
-      activeFlowSource.setData(dynData.activeFlowLine);
-    }
-
     // Update Water Flow
     const waterSource = map.getSource("water-flow-source");
     if (waterSource) {
       waterSource.setData(dynData.waterFlowGeoJSON);
     }
 
+    // Update Streamlines
+    const streamlinesSource = map.getSource("streamlines-source");
+    if (streamlinesSource) {
+      streamlinesSource.setData(dynData.streamlinesGeoJSON);
+    }
+
+    // Update Active Flow Line
+    const activeFlowSource = map.getSource("active-flow-source");
+    if (activeFlowSource) {
+      activeFlowSource.setData(dynData.activeFlowLine);
+    }
+
+    // Update Shockwave Arc
+    const shockwaveSource = map.getSource("shockwave-source");
+    if (shockwaveSource) {
+      shockwaveSource.setData(dynData.shockwaveArcGeoJSON);
+    }
+
+    // Update SAR
     const sarSource = map.getSource("sar-source");
     if (sarSource) {
       sarSource.setData(dynData.waterFlowGeoJSON);
     }
 
     // Update Layer Visibilities based on Solver Mode
+    const isSPH = solverMode === "sph" || solverMode === "compare";
+    const isDelft = solverMode === "delft3d" || solverMode === "compare";
+
     if (map.getLayer("sph-splash-layer")) {
-      map.setLayoutProperty(
-        "sph-splash-layer",
-        "visibility",
-        solverMode === "sph" || solverMode === "compare" ? "visible" : "none"
-      );
+      map.setLayoutProperty("sph-splash-layer", "visibility", isSPH ? "visible" : "none");
+    }
+    if (map.getLayer("sph-splash-outline")) {
+      map.setLayoutProperty("sph-splash-outline", "visibility", isSPH ? "visible" : "none");
     }
     if (map.getLayer("delft-overbank-layer")) {
-      map.setLayoutProperty(
-        "delft-overbank-layer",
-        "visibility",
-        solverMode === "delft3d" || solverMode === "compare" ? "visible" : "none"
-      );
+      map.setLayoutProperty("delft-overbank-layer", "visibility", isDelft ? "visible" : "none");
+    }
+    if (map.getLayer("delft-overbank-outline")) {
+      map.setLayoutProperty("delft-overbank-outline", "visibility", isDelft ? "visible" : "none");
     }
     if (map.getLayer("sar-validation-layer")) {
-      map.setLayoutProperty(
-        "sar-validation-layer",
-        "visibility",
-        showSAR ? "visible" : "none"
-      );
+      map.setLayoutProperty("sar-validation-layer", "visibility", showSAR ? "visible" : "none");
     }
 
     // Update HUD telemetry
@@ -537,7 +660,7 @@ export function MapView({
     const dynData = generateDynamicDamPolygons(currentDam, timeMin, bifurcationSplit);
     if (!dynData) return;
 
-    // 1. STARTING POINT: DAM BREACH ORIGIN
+    // 1. STARTING POINT: DAM BREACH ORIGIN (Elevated pin to keep water body beneath 100% visible)
     if (!originMarkerRef.current) {
       const originEl = document.createElement("div");
       originEl.className = "dam-origin-beacon";
@@ -548,22 +671,25 @@ export function MapView({
         pointer-events: auto;
         cursor: pointer;
         z-index: 30;
+        transform: translateY(-8px);
       `;
       originEl.innerHTML = `
-        <div style="background: #e11d48; color: #fff; padding: 4px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 800; border: 1.5px solid #fff; box-shadow: 0 0 20px rgba(225, 29, 72, 0.9); display: flex; align-items: center; gap: 6px; white-space: nowrap;">
-          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ebfc72; box-shadow: 0 0 8px #ebfc72;"></span>
-          START: DAM BREACH ORIGIN (T=0)
+        <div id="origin-tag-box" style="background: rgba(19, 20, 14, 0.94); backdrop-filter: blur(8px); color: #fff; padding: 4px 9px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 800; border: 1.5px solid #e11d48; box-shadow: 0 0 16px rgba(225, 29, 72, 0.6); display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+          <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #e11d48; box-shadow: 0 0 8px #e11d48;"></span>
+          <span id="origin-title">ORIGIN: ${currentDam.name.toUpperCase()} (${currentDam.height_m}m)</span>
         </div>
-        <div style="background: rgba(19, 20, 14, 0.95); color: #ebfc72; font-family: 'JetBrains Mono', monospace; font-size: 9px; padding: 2px 6px; border-radius: 4px; margin-top: 2px; border: 1px solid rgba(244,243,232,0.2);">
-          ${currentDam.name} &bull; ${currentDam.height_m}m Head
-        </div>
-        <div style="width: 2px; height: 16px; background: #e11d48;"></div>
+        <div style="width: 2px; height: 18px; background: linear-gradient(to bottom, #e11d48, transparent);"></div>
+        <div style="width: 6px; height: 6px; border-radius: 50%; background: #e11d48; box-shadow: 0 0 10px #e11d48;"></div>
       `;
-      originMarkerRef.current = new window.maplibregl.Marker({ element: originEl })
+      originMarkerRef.current = new window.maplibregl.Marker({ element: originEl, anchor: "bottom" })
         .setLngLat(dynData.originCoords)
         .addTo(map);
     } else {
       originMarkerRef.current.setLngLat(dynData.originCoords);
+      const titleEl = document.getElementById("origin-title");
+      if (titleEl) {
+        titleEl.textContent = `ORIGIN: ${currentDam.name.toUpperCase()} (${currentDam.height_m}m)`;
+      }
     }
 
     // 2. ENDING POINT: VALLEY FLOOD EXTENT TERMINUS
@@ -577,25 +703,28 @@ export function MapView({
         pointer-events: auto;
         cursor: pointer;
         z-index: 30;
+        transform: translateY(-8px);
       `;
       termEl.innerHTML = `
-        <div style="background: #0284c7; color: #fff; padding: 4px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 800; border: 1.5px solid #fff; box-shadow: 0 0 20px rgba(2, 132, 199, 0.9); display: flex; align-items: center; gap: 6px; white-space: nowrap;">
-          <span>🏁</span>
-          END: FLOOD EXTENT TERMINUS (${currentDam.reachLengthKm} km)
+        <div id="terminus-tag-box" style="background: rgba(19, 20, 14, 0.94); backdrop-filter: blur(8px); color: #fff; padding: 4px 9px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 800; border: 1.5px solid #0284c7; box-shadow: 0 0 16px rgba(2, 132, 199, 0.6); display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+          <span style="color: #38bdf8;">🏁</span>
+          <span id="terminus-title">TERMINUS: ${currentDam.reachLengthKm} km (Safe: ${currentDam.safeElevation})</span>
         </div>
-        <div style="background: rgba(19, 20, 14, 0.95); color: #38bdf8; font-family: 'JetBrains Mono', monospace; font-size: 9px; padding: 2px 6px; border-radius: 4px; margin-top: 2px; border: 1px solid rgba(244,243,232,0.2);">
-          Safe Elevation: ${currentDam.safeElevation}
-        </div>
-        <div style="width: 2px; height: 16px; background: #0284c7;"></div>
+        <div style="width: 2px; height: 18px; background: linear-gradient(to bottom, #0284c7, transparent);"></div>
+        <div style="width: 6px; height: 6px; border-radius: 50%; background: #0284c7; box-shadow: 0 0 10px #0284c7;"></div>
       `;
-      terminusMarkerRef.current = new window.maplibregl.Marker({ element: termEl })
+      terminusMarkerRef.current = new window.maplibregl.Marker({ element: termEl, anchor: "bottom" })
         .setLngLat(dynData.terminusCoords)
         .addTo(map);
     } else {
       terminusMarkerRef.current.setLngLat(dynData.terminusCoords);
+      const termTitleEl = document.getElementById("terminus-title");
+      if (termTitleEl) {
+        termTitleEl.textContent = `TERMINUS: ${currentDam.reachLengthKm} km (Safe: ${currentDam.safeElevation})`;
+      }
     }
 
-    // 3. ADVANCING SURGE WAVEFRONT CREST (High-Visibility Pulsing Beacon with Direction & Depth)
+    // 3. ADVANCING SURGE WAVEFRONT CREST (Elevated beacon with real-time velocity, depth, and distance)
     if (!waveFrontMarkerRef.current) {
       const wfEl = document.createElement("div");
       wfEl.className = "surge-wavefront-beacon";
@@ -605,15 +734,17 @@ export function MapView({
         align-items: center;
         pointer-events: auto;
         z-index: 45;
+        transform: translateY(-8px);
       `;
       wfEl.innerHTML = `
-        <div id="wf-badge" style="background: #ebfc72; color: #13140e; padding: 5px 12px; border-radius: 9999px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 900; box-shadow: 0 0 25px rgba(235, 252, 114, 0.95), 0 0 0 2px #13140e; display: flex; align-items: center; gap: 7px; white-space: nowrap;">
-          <span style="display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #e11d48; animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
+        <div id="wf-badge" style="background: #ebfc72; color: #13140e; padding: 4px 10px; border-radius: 9999px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 900; box-shadow: 0 0 25px rgba(235, 252, 114, 0.95), 0 0 0 2px #13140e; display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #e11d48; animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
           <span>🌊 SURGE CREST &bull; ${dynData.currentDepthM}m Depth &bull; ${dynData.currentSpeedMs} m/s &bull; ${dynData.distanceCoveredKm} km</span>
         </div>
-        <div style="width: 2px; height: 16px; background: #ebfc72;"></div>
+        <div style="width: 2px; height: 18px; background: linear-gradient(to bottom, #ebfc72, transparent);"></div>
+        <div style="width: 7px; height: 7px; border-radius: 50%; background: #ebfc72; box-shadow: 0 0 12px #ebfc72;"></div>
       `;
-      waveFrontMarkerRef.current = new window.maplibregl.Marker({ element: wfEl })
+      waveFrontMarkerRef.current = new window.maplibregl.Marker({ element: wfEl, anchor: "bottom" })
         .setLngLat(dynData.currentPos)
         .addTo(map);
     } else {
@@ -621,7 +752,7 @@ export function MapView({
       const badge = document.getElementById("wf-badge");
       if (badge) {
         badge.innerHTML = `
-          <span style="display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #e11d48; animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
+          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #e11d48; animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
           <span>🌊 SURGE CREST &bull; ${dynData.currentDepthM}m Depth &bull; ${dynData.currentSpeedMs} m/s &bull; ${dynData.distanceCoveredKm} km</span>
         `;
       }
@@ -638,24 +769,24 @@ export function MapView({
         el.style.cssText = `
           display: flex;
           align-items: center;
-          gap: 4px;
-          background: rgba(2, 132, 199, 0.92);
-          color: #ebfc72;
-          border: 1.5px solid #38bdf8;
+          gap: 3px;
+          background: rgba(13, 22, 35, 0.92);
+          color: #00f0ff;
+          border: 1px solid #00f0ff;
           border-radius: 9999px;
-          padding: 2px 7px;
+          padding: 2px 6px;
           font-family: 'JetBrains Mono', monospace;
-          font-size: 9px;
+          font-size: 8.5px;
           font-weight: 800;
-          box-shadow: 0 0 12px rgba(2, 132, 199, 0.85);
+          box-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
           pointer-events: none;
           white-space: nowrap;
           z-index: 28;
         `;
         el.innerHTML = `
-          <span style="display: inline-block; transform: rotate(${v.bearingDeg}deg); font-size: 11px; color: #fff;">➔</span>
-          <span>${v.speedMs} m/s</span>
-          <span style="background: rgba(19, 20, 14, 0.9); color: #fff; padding: 1px 4px; border-radius: 3px; font-size: 8px;">${v.depthM}m</span>
+          <span style="display: inline-block; transform: rotate(${v.bearingDeg}deg); font-size: 10px; color: #ebfc72;">➔</span>
+          <span style="color: #fff;">${v.speedMs}m/s</span>
+          <span style="color: #00f0ff; font-size: 8px;">(${v.depthM}m)</span>
         `;
 
         const marker = new window.maplibregl.Marker({ element: el })
@@ -686,22 +817,22 @@ export function MapView({
 
       if (isFlooded) {
         el.innerHTML = `
-          <div style="background: rgba(225, 29, 72, 0.95); color: #fff; border: 1.5px solid #fff; border-radius: 9999px; padding: 3px 8px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 800; box-shadow: 0 0 15px rgba(225, 29, 72, 0.8); display: flex; align-items: center; gap: 5px; white-space: nowrap;">
-            <span>⚠️ INUNDATED:</span>
-            <span>${s.name.split("/")[0]}</span>
-            <span style="background: #13140e; color: #ebfc72; padding: 1px 4px; border-radius: 3px; font-size: 9px;">${s.peakDepthM}m</span>
+          <div style="background: rgba(225, 29, 72, 0.95); color: #fff; border: 1.5px solid #fff; border-radius: 9999px; padding: 2px 7px; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 800; box-shadow: 0 0 15px rgba(225, 29, 72, 0.8); display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+            <span>⚠️</span>
+            <span>${s.name.split("/")[0].trim()}</span>
+            <span style="background: #13140e; color: #ebfc72; padding: 0.5px 4px; border-radius: 3px; font-size: 8.5px;">${s.peakDepthM}m</span>
           </div>
-          <div style="width: 2px; height: 10px; background: #e11d48;"></div>
+          <div style="width: 1.5px; height: 10px; background: #e11d48;"></div>
         `;
       } else {
         const eta = s.arrivalMin - timeMin;
         el.innerHTML = `
-          <div style="background: rgba(19, 20, 14, 0.95); color: #f4f3e8; border: 1px solid rgba(244,243,232,0.3); border-radius: 9999px; padding: 3px 8px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,0.8); display: flex; align-items: center; gap: 5px; white-space: nowrap;">
-            <span style="color: #38bdf8;">🛡️ SAFE</span>
-            <span>${s.name.split("/")[0]}</span>
-            <span style="color: #ebfc72; font-size: 9px;">(ETA: ${eta}m)</span>
+          <div style="background: rgba(19, 20, 14, 0.92); color: #f4f3e8; border: 1px solid rgba(244,243,232,0.3); border-radius: 9999px; padding: 2px 7px; font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; box-shadow: 0 4px 10px rgba(0,0,0,0.8); display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+            <span style="color: #38bdf8;">🛡️</span>
+            <span>${s.name.split("/")[0].trim()}</span>
+            <span style="color: #ebfc72; font-size: 8.5px;">(ETA: ${eta}m)</span>
           </div>
-          <div style="width: 2px; height: 10px; background: rgba(244,243,232,0.4);"></div>
+          <div style="width: 1.5px; height: 10px; background: rgba(244,243,232,0.4);"></div>
         `;
       }
 
@@ -729,10 +860,10 @@ export function MapView({
         background: rgba(19, 20, 14, 0.85);
         color: #38bdf8;
         border: 1px solid #0284c7;
-        border-radius: 4px;
-        padding: 1px 5px;
+        border-radius: 3px;
+        padding: 1px 4px;
         font-family: 'JetBrains Mono', monospace;
-        font-size: 9px;
+        font-size: 8px;
         font-weight: 700;
         pointer-events: none;
         white-space: nowrap;
@@ -754,17 +885,39 @@ export function MapView({
     updateMarkersAndBeacons(mapRef.current, activeDam, simTimeMinutes);
   }, [simTimeMinutes, activeDam, bifurcationSplit, solverMode, showSAR, showVectors, mapLoaded]);
 
-  // Smooth camera flyTo when Dam changes
+  // Smooth camera fitBounds / flyTo when Dam changes
   useEffect(() => {
     if (!mapRef.current || !mapLoaded) return;
-    mapRef.current.flyTo({
-      center: activeDam.coords,
-      zoom: 11.2,
-      pitch,
-      bearing,
-      essential: true,
-      duration: 2200,
-    });
+    try {
+      if (window.maplibregl) {
+        const bounds = new window.maplibregl.LngLatBounds();
+        activeDam.thalweg.forEach((pt) => bounds.extend(pt.coords));
+        mapRef.current.fitBounds(bounds, {
+          padding: { top: 90, bottom: 90, left: 100, right: 100 },
+          pitch: 58,
+          maxZoom: 12.8,
+          duration: 2000,
+        });
+      } else {
+        mapRef.current.flyTo({
+          center: activeDam.coords,
+          zoom: 11.2,
+          pitch,
+          bearing,
+          essential: true,
+          duration: 2000,
+        });
+      }
+    } catch {
+      mapRef.current.flyTo({
+        center: activeDam.coords,
+        zoom: 11.2,
+        pitch,
+        bearing,
+        essential: true,
+        duration: 2000,
+      });
+    }
   }, [activeDam.id]);
 
   // Style change when basemap changes
@@ -809,7 +962,7 @@ export function MapView({
             </div>
             <div>
               <span className="text-[#84837b]">PEAK DEPTH: </span>
-              <span className="text-rose-400 font-bold">{telemetry.depthM}m (3D Extrusion)</span>
+              <span className="text-rose-400 font-bold">{telemetry.depthM}m (Hydrodynamic Core)</span>
             </div>
           </div>
           <div className="flex items-center justify-between border-t border-[rgba(244,243,232,0.08)] pt-1 text-[9px]">
@@ -817,6 +970,32 @@ export function MapView({
             <span className={telemetry.settlementsInundated > 0 ? "text-rose-400 font-bold" : "text-emerald-400 font-bold"}>
               {telemetry.settlementsInundated} of {telemetry.settlementsTotal} Inundated
             </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Hydraulic Water Tier & Streamflow In-Map Legend (Bottom-Right) */}
+      <div className="absolute bottom-4 right-4 z-20 pointer-events-none hidden sm:flex flex-col gap-1 font-mono text-[9px]">
+        <div className="bg-[#13140e]/92 backdrop-blur-md border border-[rgba(244,243,232,0.18)] px-3 py-2 rounded-lg shadow-xl flex flex-col gap-1.5 pointer-events-auto">
+          <div className="text-[#ebfc72] font-bold text-[10px] border-b border-[rgba(244,243,232,0.1)] pb-1 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#00e5ff] animate-ping" />
+            <span>HYDRAULIC WATER PROFILE</span>
+          </div>
+          <div className="flex items-center gap-2 text-[#f4f3e8]">
+            <span className="w-3.5 h-2.5 rounded-sm bg-[#00e5ff] border border-cyan-200" />
+            <span className="font-semibold text-cyan-300">Deep Core Channel (&gt;5m)</span>
+          </div>
+          <div className="flex items-center gap-2 text-[#f4f3e8]">
+            <span className="w-3.5 h-2.5 rounded-sm bg-[#0284c7] border border-sky-400" />
+            <span className="text-sky-300">Surge Splash Zone (2m–5m)</span>
+          </div>
+          <div className="flex items-center gap-2 text-[#f4f3e8]">
+            <span className="w-3.5 h-2.5 rounded-sm bg-[#f59e0b] border border-amber-300" />
+            <span className="text-amber-300">Overbank Valley Spread (&lt;2m)</span>
+          </div>
+          <div className="flex items-center gap-2 text-[#f4f3e8] border-t border-[rgba(244,243,232,0.08)] pt-1">
+            <span className="w-3.5 h-0.5 bg-white shadow-[0_0_6px_#00f0ff]" />
+            <span className="text-emerald-300 font-bold">➔ Animated Downstream Current</span>
           </div>
         </div>
       </div>

@@ -201,9 +201,8 @@ export function DigitalTwinSimulator() {
       setSelectedDam(found);
       setWaterDepth(Math.round(found.height_m * 0.85));
       setManningN(Number((found.manning_n_default * selectedDEM.factor).toFixed(3)));
-      if (mapInstance) {
-        mapInstance.flyTo({ center: found.coords, zoom: 11.2, pitch: is3DMode ? 64 : 0, duration: 1500 });
-      }
+      const maxArr = found.thalweg[found.thalweg.length - 1].arrivalMin;
+      setSimTimeMinutes(Math.min(50, Math.max(15, Math.round(maxArr * 0.42))));
     }
   };
 
@@ -312,6 +311,42 @@ export function DigitalTwinSimulator() {
             >
               <Download size={14} /> EXPORT SITUATION REPORT
             </button>
+          </div>
+        </div>
+
+        {/* 10 National River Basin & Dam Quick Selector */}
+        <div className="mb-4 bg-[#1b1d14]/70 p-3 rounded-lg border border-[rgba(244,243,232,0.12)]">
+          <div className="text-[10px] font-mono text-[#84837b] uppercase mb-2 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-[#00e5ff] font-bold">
+              <Globe2 size={13} className="text-[#00e5ff]" />
+              SELECT RIVER BASIN &amp; DAM (ALL 10 CWC BENCHMARK TWINS)
+            </span>
+            <span className="text-[#ebfc72] font-mono text-[10px]">
+              CURRENT: {selectedDam.name.toUpperCase()} &bull; {selectedDam.state}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {COMPREHENSIVE_NATIONAL_DAMS.map((d) => {
+              const isSelected = selectedDam.id === d.id;
+              return (
+                <button
+                  key={d.id}
+                  onClick={() => handleSelectDam(d.id)}
+                  className={`px-3 py-1.5 rounded font-mono text-xs transition border flex items-center gap-2 ${
+                    isSelected
+                      ? "bg-[#00e5ff] text-[#06090e] border-[#00e5ff] font-bold shadow-md shadow-cyan-500/20"
+                      : "bg-[#13140e] text-[#f4f3e8] border-[rgba(244,243,232,0.18)] hover:border-[#00e5ff] hover:text-[#00e5ff]"
+                  }`}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ background: isSelected ? "#06090e" : "#00e5ff" }}
+                  />
+                  <span>{d.river}</span>
+                  <span className="opacity-70 text-[10px]">({d.name.split(" ")[0]})</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
