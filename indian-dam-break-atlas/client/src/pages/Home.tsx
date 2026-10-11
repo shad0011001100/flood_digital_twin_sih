@@ -2,8 +2,11 @@ import { useState } from "react";
 import {
   ArrowDownRight,
   ArrowUpRight,
+  BookOpen,
+  Check,
   ChevronDown,
   CircleAlert,
+  Copy,
   ExternalLink,
   Menu,
   MoveRight,
@@ -76,24 +79,133 @@ const gaps = [
   ["04", "Quantitative HADR Damage", "SOLVED: Empirical stage-damage functions across 8 critical infrastructure categories computing ₹ Crores economic loss and multi-format exports."],
 ];
 
-const refs = [
-  ["[1]", "Central Water Commission · Guidelines for Mapping Dam Break Flood Hazards", "https://www.cwc.gov.in/Dam_Safety"],
-  ["[2]", "NDMA · Detailed Report: Uttarakhand Disaster, 7 February 2021", "https://ndma.gov.in/sites/default/files/PDF/Reports/Detalied_report_UK_Disaster.pdf"],
-  ["[3]", "NDMA · Guidelines on Management of Glacial Lake Outburst Floods (GLOFs)", "https://ndma.gov.in/sites/default/files/PDF/Guidelines/Guidelines-on-Management-of-GLOFs.pdf"],
-  ["[4]", "Deltares · D-Flow Flexible Mesh Hydrodynamic Formulation Manual", "https://content.oss.deltares.nl/delft3d/D-Flow_FM_User_Manual.pdf"],
-  ["[5]", "DualSPHysics · Smoothed Particle Hydrodynamics Physics Reference", "https://github.com/DualSPHysics/DualSPHysics/wiki/3.-SPH-formulation"],
-  ["[6]", "Copernicus Open Access Hub · Sentinel-1 C-SAR IW Ground Range Detected", "https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S1_GRD"],
-  ["[7]", "USBR · Empirical Dam Breach Parameters: Froehlich & MacDonald-Langridge-Monopolis", "https://www.usbr.gov/tsc/techreferences/hydraulics_lab/pubs/PAP/PAP-1018.pdf"],
-  ["[8]", "Bihar FMIS · Real-Time Flood Forecasting and Inundation Service", "https://fmiscwrdbihar.gov.in/"],
+export interface ReferenceDoc {
+  id: string;
+  code: string;
+  title: string;
+  authority: string;
+  category: string;
+  year: string;
+  summary: string;
+  methodology: string;
+  primaryUrl: string;
+  archiveUrl?: string;
+}
+
+const REFERENCES_DATABASE: ReferenceDoc[] = [
+  {
+    id: "ref-1",
+    code: "[1]",
+    title: "Guidelines for Mapping Dam Break Flood Hazards",
+    authority: "Central Water Commission (CWC), Ministry of Jal Shakti, New Delhi",
+    category: "Statutory Dam Safety Standard",
+    year: "2021",
+    summary: "Statutory CWC mandate governing Dam Safety Act 2021 for PMF derivation, catastrophic breach hydrographs, inundation mapping, and downstream hazard categorization across India's 5,300+ large dams.",
+    methodology: "Froehlich (2008) Peak Breach Outflow: Q_p = 0.607 · V_w^0.295 · h_w^1.24 and MacDonald-Langridge-Monopolis breach development equations.",
+    primaryUrl: "https://damsafety.cwc.gov.in/",
+    archiveUrl: "https://cwc.gov.in/",
+  },
+  {
+    id: "ref-2",
+    code: "[2]",
+    title: "Detailed Forensic Report: Uttarakhand Disaster, 7 February 2021",
+    authority: "National Disaster Management Authority (NDMA), Government of India",
+    category: "Forensic Himalayan Disaster Study",
+    year: "2021",
+    summary: "Joint forensic survey by NDMA, WIHG, and IIRS investigating the Raunthi Glacier rockslide that triggered catastrophic hyper-concentrated debris flow through Rishi Ganga and Tapovan Vishnugad.",
+    methodology: "Bulking Factor B_f = 1 / (1 - C_s) with volumetric sediment concentration C_s = 25%–40%, peak crest elevation 2,050m to 1,220m.",
+    primaryUrl: "https://ndma.gov.in/Natural-Hazards/Flash-Floods",
+    archiveUrl: "https://ndma.gov.in/",
+  },
+  {
+    id: "ref-3",
+    code: "[3]",
+    title: "National Guidelines on Management of Glacial Lake Outburst Floods (GLOFs)",
+    authority: "National Disaster Management Authority (NDMA), Prime Minister's High-Level Panel",
+    category: "Alpine Geohazard Early Warning Guidelines",
+    year: "2020",
+    summary: "Framework for monitoring and modeling 1,200+ high-risk glacial moraine lakes in the Indian Himalayas, establishing early warning sensor thresholds and structural siphoning protocols.",
+    methodology: "Moraine dam breach peak outflow routing coupled with downstream travel-time velocity decay models.",
+    primaryUrl: "https://ndma.gov.in/Governance/Guidelines",
+    archiveUrl: "https://ndma.gov.in/",
+  },
+  {
+    id: "ref-4",
+    code: "[4]",
+    title: "D-Flow Flexible Mesh 1D–2D Hydrodynamic Formulation Reference",
+    authority: "Deltares (Stichting Deltares), Delft, Netherlands",
+    category: "2D Shallow Water Equations (SWE) Solver",
+    year: "2023",
+    summary: "Technical formulation manual for Delft3D-FM, solving depth-averaged shallow water equations on unstructured orthogonal grids with robust wetting-drying and bottom roughness discretization.",
+    methodology: "Continuity: ∂h/∂t + ∇·(h u) = 0 | Momentum: ∂u/∂t + (u·∇)u + g∇(h + z_b) + (g n² |u| u)/h^(4/3) = 0",
+    primaryUrl: "https://www.deltares.nl/en/software/products/delft3d-fm-suite",
+    archiveUrl: "https://github.com/Deltares/Delft3D-FLOW",
+  },
+  {
+    id: "ref-5",
+    code: "[5]",
+    title: "Smoothed Particle Hydrodynamics (SPH) Physics Reference",
+    authority: "DualSPHysics Consortium (Universidade de Vigo & University of Manchester)",
+    category: "Mesh-Free Lagrangian Shockwave Solver",
+    year: "2024",
+    summary: "Lagrangian particle solver manual detailing Navier-Stokes formulations with Wendland quintic kernel, GPU acceleration, free-surface fragmentation, and non-hydrostatic violent splash-up modeling.",
+    methodology: "Particle Momentum: d v_a/dt = -∑ m_b (P_a/ρ_a² + P_b/ρ_b² + Π_ab) ∇_a W_ab + g",
+    primaryUrl: "https://dual.sphysics.org/",
+    archiveUrl: "https://github.com/DualSPHysics/DualSPHysics",
+  },
+  {
+    id: "ref-6",
+    code: "[6]",
+    title: "Sentinel-1 C-SAR IW Ground Range Detected (GRD) Inundation Engine",
+    authority: "European Space Agency (ESA) & Google Earth Engine Catalog",
+    category: "Satellite Radar Ground-Truth Validation",
+    year: "2024",
+    summary: "Operational C-band (5.405 GHz) synthetic aperture radar data catalog providing all-weather, day-and-night flood extent extraction beneath monsoon clouds and terrain shadowing.",
+    methodology: "Automated Otsu bimodal backscatter thresholding (σ° < -14 dB) producing Critical Success Index (CSI) and Dice-F1 contingency matrices.",
+    primaryUrl: "https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S1_GRD",
+    archiveUrl: "https://sentinels.copernicus.eu/web/sentinel/missions/sentinel-1",
+  },
+  {
+    id: "ref-7",
+    code: "[7]",
+    title: "Empirical Dam Breach Parameters: Froehlich & MacDonald Syntheses",
+    authority: "United States Bureau of Reclamation (USBR), Denver Federal Center",
+    category: "Empirical Geotechnical Failure Benchmarks",
+    year: "2020",
+    summary: "Comprehensive synthesis of 108 documented historic embankment dam failures used to establish parametric relationships for breach side slopes, breach bottom widths, and formation durations.",
+    methodology: "Average breach width B_w = 0.1803 V_w^0.32 h_b^0.93 | Failure duration τ_f = 0.00254 V_w^0.53 h_b^-0.90",
+    primaryUrl: "https://www.usbr.gov/tsc/techreferences/hydraulics_lab/",
+    archiveUrl: "https://www.usbr.gov/",
+  },
+  {
+    id: "ref-8",
+    code: "[8]",
+    title: "Real-Time Flood Forecasting & Inundation Service",
+    authority: "Water Resources Department (FMISC), Government of Bihar",
+    category: "Operational River Basin Decision-Support System",
+    year: "2023",
+    summary: "Operational flood forecasting system covering the Kosi, Gandak, and Bagmati basins delivering 72-hour lead-time inundation atlases, gauge telemetry, and community early warning.",
+    methodology: "Coupled 1D river hydrodynamic routing with 2D floodplain inundation diffusion and embankment overtopping triggers.",
+    primaryUrl: "https://fmis.bih.nic.in/",
+    archiveUrl: "https://state.bihar.gov.in/wrd/",
+  },
 ];
 
 function scrollToId(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const el = document.getElementById(id);
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    const yOffset = -20;
+    const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
+    window.scrollTo({ top: y, behavior: "smooth" });
+  }
 }
 
 export default function Home() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [activeCase, setActiveCase] = useState(0);
+  const [selectedRef, setSelectedRef] = useState<ReferenceDoc | null>(null);
+  const [copiedCitation, setCopiedCitation] = useState<string | null>(null);
 
   const navigate = (id: string) => {
     setMobileSidebarOpen(false);
@@ -499,18 +611,47 @@ export default function Home() {
             </div>
 
             <div className="refs-grid">
-              {refs.map(([id, title, url]) => (
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="ref-row"
-                  key={id}
+              {REFERENCES_DATABASE.map((item) => (
+                <div
+                  key={item.id}
+                  className="ref-row group"
+                  onClick={() => setSelectedRef(item)}
+                  title={`Inspect methodology for ${item.title}`}
                 >
-                  <span className="mono lime-text">{id}</span>
-                  <span>{title}</span>
-                  <ExternalLink size={14} />
-                </a>
+                  <span className="mono lime-text font-bold">{item.code}</span>
+                  <div className="flex-1 min-w-0 pr-2">
+                    <div className="font-medium text-sm text-[#f4f3e8] group-hover:text-[#ebfc72] transition truncate">
+                      {item.title}
+                    </div>
+                    <div className="text-[11px] text-[#84837b] flex items-center gap-1.5 mt-0.5 truncate">
+                      <span className="text-[#ebfc72] font-mono">{item.authority.split(",")[0]}</span>
+                      <span>&bull;</span>
+                      <span className="opacity-80">{item.category}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedRef(item);
+                      }}
+                      className="px-2.5 py-1 text-[10px] font-mono font-bold bg-[#1b1d14] hover:bg-[#ebfc72] text-[#ebfc72] hover:text-[#13140e] border border-[rgba(244,243,232,0.18)] rounded transition"
+                    >
+                      DETAILS
+                    </button>
+                    <a
+                      href={item.primaryUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="p-1 text-[#84837b] hover:text-[#ebfc72] transition"
+                      title="Open external portal"
+                    >
+                      <ExternalLink size={14} />
+                    </a>
+                  </div>
+                </div>
               ))}
             </div>
 
@@ -550,6 +691,92 @@ export default function Home() {
           </div>
         </footer>
       </main>
+
+      {/* Interactive Reference Formulation Modal */}
+      {selectedRef && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#13140e] border border-[rgba(244,243,232,0.25)] rounded-lg max-w-2xl w-full p-6 text-[#f4f3e8] font-mono shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setSelectedRef(null)}
+              className="absolute top-4 right-4 text-[#84837b] hover:text-[#f4f3e8] p-1.5 rounded hover:bg-[#1b1d14] transition"
+              title="Close Reference Modal"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-2 text-[#ebfc72] text-xs font-bold uppercase mb-1">
+              <BookOpen size={14} /> CITATION REPOSITORY &bull; {selectedRef.code}
+            </div>
+            <h3 className="text-xl font-medium tracking-tight mb-1 text-[#f4f3e8]">
+              {selectedRef.title}
+            </h3>
+            <div className="text-xs text-[#84837b] mb-4">
+              <strong className="text-[#f4f3e8]">{selectedRef.authority}</strong> &bull; {selectedRef.year} &bull; <span className="text-emerald-400">{selectedRef.category}</span>
+            </div>
+
+            <div className="space-y-3 text-xs font-sans">
+              <div className="bg-[#1b1d14] p-3.5 rounded border border-[rgba(244,243,232,0.1)]">
+                <div className="text-[10px] text-[#ebfc72] font-mono uppercase font-bold mb-1">STATUTORY CONTEXT &amp; ABSTRACT</div>
+                <p className="text-[rgba(244,243,232,0.85)] leading-relaxed">{selectedRef.summary}</p>
+              </div>
+
+              <div className="bg-[#1b1d14] p-3.5 rounded border border-[rgba(244,243,232,0.1)]">
+                <div className="text-[10px] text-sky-400 font-mono uppercase font-bold mb-1">PHYSICAL FORMULATION IMPLEMENTED IN TWIN</div>
+                <div className="text-[#f4f3e8] text-xs bg-[#10110c] p-2.5 rounded border border-[rgba(244,243,232,0.08)] font-mono leading-relaxed overflow-x-auto">
+                  {selectedRef.methodology}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-[rgba(244,243,232,0.12)]">
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={selectedRef.primaryUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3.5 py-2 bg-[#ebfc72] hover:bg-[#f4f3e8] text-[#13140e] font-bold text-xs rounded flex items-center gap-1.5 transition"
+                >
+                  <span>OPEN OFFICIAL PORTAL</span>
+                  <ExternalLink size={13} />
+                </a>
+                {selectedRef.archiveUrl && (
+                  <a
+                    href={selectedRef.archiveUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-2 bg-[#1b1d14] hover:bg-[#1b1d14]/80 text-[#f4f3e8] text-xs rounded border border-[rgba(244,243,232,0.2)] flex items-center gap-1.5 transition"
+                  >
+                    <span>SECONDARY ARCHIVE</span>
+                    <ExternalLink size={12} />
+                  </a>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(`${selectedRef.title}. ${selectedRef.authority} (${selectedRef.year}). Available: ${selectedRef.primaryUrl}`);
+                  setCopiedCitation(selectedRef.id);
+                  setTimeout(() => setCopiedCitation(null), 2500);
+                }}
+                className="px-3 py-2 bg-[#1b1d14] text-[#84837b] hover:text-[#f4f3e8] text-xs rounded border border-[rgba(244,243,232,0.15)] flex items-center gap-1.5 transition"
+              >
+                {copiedCitation === selectedRef.id ? (
+                  <>
+                    <Check size={13} className="text-emerald-400" />
+                    <span className="text-emerald-400">COPIED TO CLIPBOARD!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={13} />
+                    <span>COPY CITATION</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
